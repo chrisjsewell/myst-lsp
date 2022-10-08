@@ -1,0 +1,71 @@
+{
+  "name": "myst-lsp",
+  "description": "A Language Server Protocol provider for MyST Markdown",
+  "author": "Chris Sewell",
+  "license": "MIT",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/executablebooks/myst-lsp"
+  },
+  "main": "./vscode-client/out/extension",
+  "bin": {
+    "myst-languageserver": "./server/out/server.js"
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -b",
+    "watch": "tsc -b -w",
+    "lint": "eslint  -c .eslintrc.yml --max-warnings 1 ./vscode-client/src ./server/src --ext .ts,.tsx",
+    "lint:fix": "eslint  -c .eslintrc.yml --fix ./vscode-client/src ./server/src --ext .ts,.tsx",
+    "addShebang": "(echo \"#!/usr/bin/env node\" && cat ./server/out/server.js) > ./server/out/server.js.copy && mv ./server/out/server.js.copy ./server/out/server.js",
+    "postinstall": "cd vscode-client && npm install && cd ../server && npm install && cd .. && npm run addShebang",
+    "pretest": "npm run compile",
+    "test": "sh ./scripts/e2e.sh"
+  },
+  "devDependencies": {
+    "@types/mocha": "^9.1.0",
+    "@types/node": "^16.11.7",
+    "@typescript-eslint/eslint-plugin": "^5.30.0",
+    "@typescript-eslint/parser": "^5.30.0",
+    "mocha": "^9.2.1",
+    "typescript": "^4.8.4",
+    "eslint": "^8.13.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-import": "^2.25.4",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-prettier": "^4.0.0"
+  },
+  "engines": {
+    "vscode": "^1.66.0"
+  },
+  "activationEvents": [
+    "onLanguage:markdown"
+  ],
+  "publisher": "ExecutableBookProject",
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "Example configuration",
+      "properties": {
+        "languageServerExample.maxNumberOfProblems": {
+          "scope": "resource",
+          "type": "number",
+          "default": 100,
+          "description": "Controls the maximum number of problems produced by the server."
+        },
+        "languageServerExample.trace.server": {
+          "scope": "window",
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server."
+        }
+      }
+    }
+  }
+}

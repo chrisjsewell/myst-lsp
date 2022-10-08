@@ -1,0 +1,19 @@
+{
+  "name": "myst-lsp-server",
+  "description": "Example implementation of a language server in node.",
+  "version": "0.0.1",
+  "author": "Chris Sewell",
+  "license": "MIT",
+  "engines": {
+    "node": "*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/executablebooks/myst-lsp"
+  },
+  "dependencies": {
+    "vscode-languageserver": "^7.0.0",
+    "vscode-languageserver-textdocument": "^1.0.4"
+  },
+  "scripts": {}
+}
