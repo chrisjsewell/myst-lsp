@@ -5,9 +5,10 @@
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": true
   },
-  "eslint.workingDirectories": [
-    {
-      "mode": "auto"
+  // add eslint semi: 0
+  "eslint.options": {
+    "rules": {
+      "semi": 0
     }
-  ]
+  }
 }
