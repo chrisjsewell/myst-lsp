@@ -1,11 +1,10 @@
+#!/usr/bin/env node
 /* --------------------------------------------------------------------------------------------
  * Licensed under the MIT License. See License file in the project root for license information.
  * ------------------------------------------------------------------------------------------ */
 import {
   createConnection,
   TextDocuments,
-  Diagnostic,
-  DiagnosticSeverity,
   ProposedFeatures,
   InitializeParams,
   DidChangeConfigurationNotification,
@@ -17,14 +16,33 @@ import {
   _Connection,
   DidChangeConfigurationParams,
   DidChangeWatchedFilesParams,
-  TextDocumentChangeEvent
+  TextDocumentChangeEvent,
+  FoldingRange,
+  FoldingRangeParams,
+  Hover,
+  InitializedParams
 } from "vscode-languageserver/node"
 
 import { TextDocument } from "vscode-languageserver-textdocument"
+import MarkdownIt = require("markdown-it")
+import Token = require("markdown-it/lib/token")
 
-// The example settings
+import * as dirDict from "./directives.json"
+import { matchDirectiveName, makeDescription } from "./directiveUtils"
+import { mystBlocksPlugin } from "./mdPluginMyst"
+import { divPlugin } from "./mdPluginDiv"
+
 interface ServerSettings {
-  maxNumberOfProblems: number
+  /** The tokens to apply folding to */
+  foldingTokens: string[]
+  /** Markdown-it extensions */
+  MdExtensions: string[]
+}
+
+export interface IDocData {
+  doc: TextDocument
+  tokens: Token[]
+  lineToTokenIndex: number[][]
 }
 
 class Server {
@@ -35,6 +53,7 @@ class Server {
   defaultSettings: ServerSettings
   globalSettings: ServerSettings
   documentSettings: Map<string, Thenable<ServerSettings>>
+  documentData: Map<string, IDocData>
   documents: TextDocuments<TextDocument>
 
   constructor() {
@@ -42,11 +61,26 @@ class Server {
     this.hasWorkspaceFolderCapability = false
     this.hasDiagnosticRelatedInformationCapability = false
 
-    this.defaultSettings = { maxNumberOfProblems: 1000 }
+    this.defaultSettings = {
+      MdExtensions: ["colon_fence"],
+      foldingTokens: [
+        "paragraph_open",
+        "blockquote_open",
+        "bullet_list_open",
+        "ordered_list_open",
+        "code_block",
+        "fence",
+        "html_block",
+        "table_open",
+        "div_open"
+      ]
+    }
     // The global settings, used when the `workspace/configuration` request is not supported by the client.
     this.globalSettings = this.defaultSettings
     // Cache the settings of all open documents
     this.documentSettings = new Map()
+
+    this.documentData = new Map()
 
     // Create a connection for the server, using Node's IPC as a transport.
     // Also include all preview / proposed LSP features.
@@ -61,12 +95,16 @@ class Server {
     // Only keep settings for open documents
     this.documents.onDidClose(e => {
       this.documentSettings.delete(e.document.uri)
+      this.documentData.delete(e.document.uri)
     })
 
     this.documents.onDidChangeContent(this.onDidChangeContent.bind(this))
     this.connection.onDidChangeWatchedFiles(this.onDidChangeWatchedFiles.bind(this))
     this.connection.onCompletion(this.onCompletion.bind(this))
     this.connection.onCompletionResolve(this.onCompletionResolve.bind(this))
+    this.connection.onHover(this.onHover.bind(this))
+
+    this.connection.onFoldingRanges(this.onFoldingRanges.bind(this))
 
     // Make the text document manager listen on the connection
     // for open, change and close text document events
@@ -98,8 +136,11 @@ class Server {
         textDocumentSync: TextDocumentSyncKind.Incremental,
         // Tell the client that this server supports code completion.
         completionProvider: {
-          resolveProvider: true
-        }
+          resolveProvider: true,
+          triggerCharacters: ["{"]
+        },
+        foldingRangeProvider: true,
+        hoverProvider: true
       }
     }
     if (this.hasWorkspaceFolderCapability) {
@@ -109,10 +150,11 @@ class Server {
         }
       }
     }
+
     return result
   }
 
-  onInitialized() {
+  onInitialized(params: InitializedParams) {
     if (this.hasConfigurationCapability) {
       // Register for all configuration changes.
       this.connection.client.register(
@@ -150,66 +192,78 @@ class Server {
       this.globalSettings = change.settings.languageServerMyst || this.defaultSettings
     }
 
-    // Revalidate all open text documents
-    this.documents.all().forEach(this.validateTextDocument.bind(this))
+    // Re-parse all open text documents
+    this.documents.all().forEach(this.parseTextDocument.bind(this))
   }
 
-  async validateTextDocument(textDocument: TextDocument): Promise<void> {
-    // In this simple example we get the settings for every validate run.
+  async parseTextDocument(textDocument: TextDocument): Promise<void> {
+    // For now we simply get the settings for every parse.
     const settings = await this.getDocumentSettings(textDocument.uri)
 
     // The validator creates diagnostics for all uppercase words length 2 and more
     const text = textDocument.getText()
-    const pattern = /\b[A-Z]{2,}\b/g
-    let m: RegExpExecArray | null
 
-    let problems = 0
-    const diagnostics: Diagnostic[] = []
-    while ((m = pattern.exec(text)) && problems < settings.maxNumberOfProblems) {
-      problems++
-      const diagnostic: Diagnostic = {
-        severity: DiagnosticSeverity.Warning,
-        range: {
-          start: textDocument.positionAt(m.index),
-          end: textDocument.positionAt(m.index + m[0].length)
-        },
-        message: `${m[0]} is all uppercase.`,
-        source: "ex"
+    const md = new MarkdownIt("commonmark", {})
+    md.use(mystBlocksPlugin)
+    if (settings.MdExtensions.includes("colon_fence")) {
+      md.use(divPlugin)
+    }
+    md.enable("table")
+    md.disable(["inline", "text_join"])
+    const tokens = md.parse(text, {})
+
+    // create a mapping of line number to token indexes that span that line
+    // this is used for cursor based server queries, such as hover and completions
+    const lineToTokenIndex: number[][] = []
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i]
+      if (!token.map) {
+        continue
       }
-      if (this.hasDiagnosticRelatedInformationCapability) {
-        diagnostic.relatedInformation = [
-          {
-            location: {
-              uri: textDocument.uri,
-              range: Object.assign({}, diagnostic.range)
-            },
-            message: "Spelling matters"
-          },
-          {
-            location: {
-              uri: textDocument.uri,
-              range: Object.assign({}, diagnostic.range)
-            },
-            message: "Particularly for names"
-          }
-        ]
+      // loop through all lines the token spans
+      for (let j = token.map[0]; j < token.map[1]; j++) {
+        if (lineToTokenIndex[j] === undefined) {
+          lineToTokenIndex[j] = []
+        }
+        lineToTokenIndex[j].push(i)
       }
-      diagnostics.push(diagnostic)
     }
 
-    // Send the computed diagnostics to VSCode.
-    this.connection.sendDiagnostics({ uri: textDocument.uri, diagnostics })
+    this.documentData.set(textDocument.uri, {
+      doc: textDocument,
+      tokens: tokens,
+      lineToTokenIndex: lineToTokenIndex
+    })
+  }
+
+  async onFoldingRanges(params: FoldingRangeParams): Promise<FoldingRange[]> {
+    const textDocument = this.documents.get(params.textDocument.uri)
+    if (!textDocument) {
+      return []
+    }
+    const settings = await this.getDocumentSettings(textDocument.uri)
+    const foldingRanges: FoldingRange[] = []
+    for (const token of this.documentData.get(textDocument.uri)?.tokens || []) {
+      if (token.map && settings.foldingTokens.includes(token.type)) {
+        foldingRanges.push({
+          startLine: token.map[0],
+          endLine: token.map[1] - 1
+        })
+      }
+    }
+    return foldingRanges
   }
 
   // The content of a text document has changed. This event is emitted
   // when the text document first opened or when its content has changed.
   onDidChangeContent(change: TextDocumentChangeEvent<TextDocument>) {
-    this.validateTextDocument(change.document)
+    // console.log(`Received onDidChangeContent event: ${change.document.uri}`)
+    this.parseTextDocument(change.document)
   }
 
   // Monitored files have changed
   onDidChangeWatchedFiles(change: DidChangeWatchedFilesParams) {
-    this.connection.console.log("We received a file change event")
+    // console.log(`Received onDidChangeWatchedFiles event: ${change.changes}`)
   }
 
   // This handler provides the initial list of the completion items.
@@ -217,29 +271,81 @@ class Server {
     // The pass parameter contains the position of the text document in
     // which code complete got requested. For the example we ignore this
     // info and always provide the same completion items.
-    return [
-      {
-        label: "TypeScript",
-        kind: CompletionItemKind.Text,
-        data: 1
-      },
-      {
-        label: "JavaScript",
-        kind: CompletionItemKind.Text,
-        data: 2
+
+    const docData = this.documentData.get(textDocumentPosition.textDocument.uri)
+    if (!docData) {
+      return []
+    }
+
+    const indexes = docData.lineToTokenIndex[textDocumentPosition.position.line] || []
+
+    const completionItems: CompletionItem[] = []
+    for (const index of indexes) {
+      const token = docData.tokens[index]
+      if (
+        token.map &&
+        textDocumentPosition.position.line === token.map[0] &&
+        (token.type === "fence" || token.type === "div_open")
+      ) {
+        const startText = docData.doc.getText({
+          start: { line: textDocumentPosition.position.line, character: 0 },
+          end: textDocumentPosition.position
+        })
+        if (startText.match(/(```|~~~|:::){$/)) {
+          const dict: { [key: string]: { name: string } } = dirDict
+          for (const name in dirDict) {
+            const data = dict[name]
+            completionItems.push({
+              label: data.name,
+              kind: CompletionItemKind.Class,
+              data: "myst.directive"
+            })
+          }
+        }
       }
-    ]
+    }
+
+    return completionItems
+  }
+
+  onHover(params: TextDocumentPositionParams): Hover | null {
+    const docData = this.documentData.get(params.textDocument.uri)
+    if (!docData) {
+      return null
+    }
+
+    const indexes = docData.lineToTokenIndex[params.position.line] || []
+
+    for (const index of indexes) {
+      const token = docData.tokens[index]
+      if (
+        token.map &&
+        params.position.line === token.map[0] &&
+        (token.type === "fence" || token.type === "div_open")
+      ) {
+        const name = matchDirectiveName(docData, params)
+        if (name) {
+          const dict: { [key: string]: { name: string } } = dirDict
+          const data = dict[name]
+          if (data) {
+            return {
+              contents: makeDescription(data)
+            }
+          }
+        }
+      }
+    }
+
+    return null
   }
 
   // This handler resolves additional information for the item selected in
   // the completion list.
   onCompletionResolve(item: CompletionItem): CompletionItem {
-    if (item.data === 1) {
-      item.detail = "TypeScript details"
-      item.documentation = "TypeScript documentation"
-    } else if (item.data === 2) {
-      item.detail = "JavaScript details"
-      item.documentation = "JavaScript documentation"
+    if (item.data === "myst.directive") {
+      const dict: { [key: string]: { name: string } } = dirDict
+      const data = dict[item.label]
+      item.documentation = makeDescription(data)
     }
     return item
   }

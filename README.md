@@ -8,7 +8,11 @@ A Language Server Protocol provider for MyST Markdown.
 
 This was originally adapted from <https://github.com/microsoft/vscode-extension-samples/tree/main/lsp-sample>
 
-```
+:::{admonition}
+
+:::
+
+```{admonition}
 .
 ├── package.json // The extension manifest.
 └── server // Language Server
@@ -64,3 +68,20 @@ See <https://github.com/jupyter-lsp/jupyterlab-lsp>
    ```
 
 5. Open a Markdown file, and make sure the file type is set to `MyST`
+
+## TODO / Notes
+
+- [ ] folding rang for headings
+- [ ] diagnostics if heading levels are not sequential
+- [ ] background reading of all files in the workspace (to populate targets lookup)
+
+### Jupyterlab-lsp
+
+- How do stop `.md` files from being opened as `ipythongfm`?
+- How do you trigger completions with with key-bindings (e.g. with VS Code is `ctrl+space`)?
+  - I managed to get it to activate a few times with after writing `:::{not`, but seems very temperamental?
+- Enabling for notebooks (coming in v4.0?)
+
+### VS Code
+
+- Enabling for notebooks

@@ -127,3 +127,4 @@ dist
 .pnp.*
 
 .DS_Store
+.ipynb_checkpoints

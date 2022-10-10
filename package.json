@@ -14,12 +14,12 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -b",
+    "compile": "tsc -b && npm run execPermissions",
     "watch": "tsc -b -w",
     "lint": "eslint  -c .eslintrc.yml --max-warnings 1 ./vscode-client/src ./server/src --ext .ts,.tsx",
     "lint:fix": "eslint  -c .eslintrc.yml --fix ./vscode-client/src ./server/src --ext .ts,.tsx",
-    "addShebang": "(echo \"#!/usr/bin/env node\" && cat ./server/out/server.js) > ./server/out/server.js.copy && mv ./server/out/server.js.copy ./server/out/server.js",
-    "postinstall": "cd vscode-client && npm install && cd ../server && npm install && cd .. && npm run addShebang",
+    "execPermissions": "chmod +x ./server/out/server.js",
+    "postinstall": "cd vscode-client && npm install && cd ../server && npm install && cd ..",
     "pretest": "npm run compile",
     "test": "sh ./scripts/e2e.sh"
   },
@@ -46,13 +46,37 @@
   "contributes": {
     "configuration": {
       "type": "object",
-      "title": "Example configuration",
+      "title": "MyST LSP configuration",
       "properties": {
-        "languageServerMyst.maxNumberOfProblems": {
+        "languageServerMyst.MdExtensions": {
           "scope": "resource",
-          "type": "number",
-          "default": 100,
-          "description": "Controls the maximum number of problems produced by the server."
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "colon_fence"
+          ],
+          "description": "Control which MyST extensions to use."
+        },
+        "languageServerMyst.foldingTokens": {
+          "scope": "resource",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "paragraph_open",
+            "blockquote_open",
+            "bullet_list_open",
+            "ordered_list_open",
+            "code_block",
+            "fence",
+            "html_block",
+            "table_open",
+            "div_open"
+          ],
+          "description": "Control which block tokens produce folding ranges."
         },
         "languageServerMyst.trace.server": {
           "scope": "window",
