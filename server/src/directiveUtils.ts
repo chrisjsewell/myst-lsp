@@ -18,6 +18,18 @@ export function makeDescription(data: any): MarkupContent {
   }
 }
 
+/** Match the start of a directive */
+export function matchDirectiveStart(
+  docData: IDocData,
+  textDocumentPosition: TextDocumentPositionParams
+): RegExpMatchArray | null {
+  const startText = docData.doc.getText({
+    start: { line: textDocumentPosition.position.line, character: 0 },
+    end: textDocumentPosition.position
+  })
+  return startText.match(/(```|~~~|:::){$/)
+}
+
 /** Match position in the text to a directive name, e.g. ```{name} */
 export function matchDirectiveName(
   docData: IDocData,

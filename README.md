@@ -1,3 +1,4 @@
+(dsf)=
 # myst-lsp
 
 A Language Server Protocol provider for MyST Markdown.
@@ -8,11 +9,7 @@ A Language Server Protocol provider for MyST Markdown.
 
 This was originally adapted from <https://github.com/microsoft/vscode-extension-samples/tree/main/lsp-sample>
 
-:::{admonition}
-
-:::
-
-```{admonition}
+```
 .
 ├── package.json // The extension manifest.
 └── server // Language Server
@@ -74,12 +71,14 @@ See <https://github.com/jupyter-lsp/jupyterlab-lsp>
 - [ ] folding rang for headings
 - [ ] diagnostics if heading levels are not sequential
 - [ ] background reading of all files in the workspace (to populate targets lookup)
+- [ ] markdown-it-front-matter plugin sets wrong map (uses `pos` instead of `nextLine`)
 
 ### Jupyterlab-lsp
 
 - How do stop `.md` files from being opened as `ipythongfm`?
 - How do you trigger completions with with key-bindings (e.g. with VS Code is `ctrl+space`)?
-  - I managed to get it to activate a few times with after writing `:::{not`, but seems very temperamental?
+  - edit: I managed to get it to activate a few times with after writing `:::{not`, but seems very temperamental?
+  - actually it seems to work fine with `[` and `(`, but not with `{`
 - Enabling for notebooks (coming in v4.0?)
 
 ### VS Code

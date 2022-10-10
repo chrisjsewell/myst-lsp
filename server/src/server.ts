@@ -20,15 +20,23 @@ import {
   FoldingRange,
   FoldingRangeParams,
   Hover,
-  InitializedParams
+  InitializedParams,
+  DocumentHighlight,
+  SemanticTokensParams,
+  SemanticTokens
 } from "vscode-languageserver/node"
-
 import { TextDocument } from "vscode-languageserver-textdocument"
+
 import MarkdownIt = require("markdown-it")
 import Token = require("markdown-it/lib/token")
+import frontMatterPlugin = require("markdown-it-front-matter")
 
 import * as dirDict from "./directives.json"
-import { matchDirectiveName, makeDescription } from "./directiveUtils"
+import {
+  matchDirectiveName,
+  makeDescription,
+  matchDirectiveStart
+} from "./directiveUtils"
 import { mystBlocksPlugin } from "./mdPluginMyst"
 import { divPlugin } from "./mdPluginDiv"
 
@@ -42,6 +50,8 @@ interface ServerSettings {
 export interface IDocData {
   doc: TextDocument
   tokens: Token[]
+  definitions: { [key: string]: { title: string; href: string } }
+  targets: string[]
   lineToTokenIndex: number[][]
 }
 
@@ -98,12 +108,12 @@ class Server {
       this.documentData.delete(e.document.uri)
     })
 
+    // Features
     this.documents.onDidChangeContent(this.onDidChangeContent.bind(this))
     this.connection.onDidChangeWatchedFiles(this.onDidChangeWatchedFiles.bind(this))
     this.connection.onCompletion(this.onCompletion.bind(this))
     this.connection.onCompletionResolve(this.onCompletionResolve.bind(this))
     this.connection.onHover(this.onHover.bind(this))
-
     this.connection.onFoldingRanges(this.onFoldingRanges.bind(this))
 
     // Make the text document manager listen on the connection
@@ -137,7 +147,7 @@ class Server {
         // Tell the client that this server supports code completion.
         completionProvider: {
           resolveProvider: true,
-          triggerCharacters: ["{"]
+          triggerCharacters: ["{", "[", "("]
         },
         foldingRangeProvider: true,
         hoverProvider: true
@@ -208,9 +218,14 @@ class Server {
     if (settings.MdExtensions.includes("colon_fence")) {
       md.use(divPlugin)
     }
+    md.use(frontMatterPlugin, () => {})
     md.enable("table")
     md.disable(["inline", "text_join"])
-    const tokens = md.parse(text, {})
+    // TODO make a plugin that outputs link definitions as tokens (to get map)
+    const env: { references: { [key: string]: { title: string; href: string } } } = {
+      references: {}
+    }
+    const tokens = md.parse(text, env)
 
     // create a mapping of line number to token indexes that span that line
     // this is used for cursor based server queries, such as hover and completions
@@ -232,6 +247,8 @@ class Server {
     this.documentData.set(textDocument.uri, {
       doc: textDocument,
       tokens: tokens,
+      definitions: env.references,
+      targets: tokens.filter(t => t.type === "myst_target").map(t => t.content),
       lineToTokenIndex: lineToTokenIndex
     })
   }
@@ -287,11 +304,7 @@ class Server {
         textDocumentPosition.position.line === token.map[0] &&
         (token.type === "fence" || token.type === "div_open")
       ) {
-        const startText = docData.doc.getText({
-          start: { line: textDocumentPosition.position.line, character: 0 },
-          end: textDocumentPosition.position
-        })
-        if (startText.match(/(```|~~~|:::){$/)) {
+        if (matchDirectiveStart(docData, textDocumentPosition)) {
           const dict: { [key: string]: { name: string } } = dirDict
           for (const name in dirDict) {
             const data = dict[name]
@@ -299,6 +312,38 @@ class Server {
               label: data.name,
               kind: CompletionItemKind.Class,
               data: "myst.directive"
+            })
+          }
+        }
+      }
+      if (token.type === "inline") {
+        const charPreceding = docData.doc.getText({
+          start: {
+            line: textDocumentPosition.position.line,
+            character: textDocumentPosition.position.character - 2
+          },
+          end: {
+            line: textDocumentPosition.position.line,
+            character: textDocumentPosition.position.character
+          }
+        })
+        if (charPreceding === "](") {
+          for (const name of docData.targets) {
+            completionItems.push({
+              label: name,
+              kind: CompletionItemKind.Reference,
+              data: "myst.targets"
+            })
+          }
+        }
+        if (charPreceding === "][") {
+          for (const name in docData.definitions) {
+            const data = docData.definitions[name]
+            completionItems.push({
+              label: name,
+              kind: CompletionItemKind.Reference,
+              documentation: data.href,
+              data: "myst.definition"
             })
           }
         }
