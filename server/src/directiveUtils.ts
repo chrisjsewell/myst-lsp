@@ -3,6 +3,7 @@ import * as yaml from "js-yaml"
 
 import { TextDocumentPositionParams } from "vscode-languageserver/node"
 import { IDocData } from "./server"
+import { matchPositionText } from "./utils"
 
 /** Make a markdown description for a directive */
 export function makeDescription(data: any): MarkupContent {
@@ -22,12 +23,14 @@ export function makeDescription(data: any): MarkupContent {
 export function matchDirectiveStart(
   docData: IDocData,
   textDocumentPosition: TextDocumentPositionParams
-): RegExpMatchArray | null {
-  const startText = docData.doc.getText({
-    start: { line: textDocumentPosition.position.line, character: 0 },
-    end: textDocumentPosition.position
-  })
-  return startText.match(/(```|~~~|:::){$/)
+): boolean {
+  const match = matchPositionText(
+    docData.doc,
+    textDocumentPosition.position,
+    /(```|~~~|:::){$/,
+    null
+  )
+  return !!match.before
 }
 
 /** Match position in the text to a directive name, e.g. ```{name} */
@@ -35,18 +38,14 @@ export function matchDirectiveName(
   docData: IDocData,
   params: TextDocumentPositionParams
 ): string | null {
-  const startText = docData.doc.getText({
-    start: { line: params.position.line, character: 0 },
-    end: params.position
-  })
-  const endText = docData.doc.getText({
-    start: params.position,
-    end: { line: params.position.line, character: 9999 }
-  })
-  const matchStart = startText.match(/(```|~~~|:::){(.*)$/)
-  const matchEnd = endText.match(/^(.*)}/)
-  if (matchStart && matchEnd) {
-    return matchStart[2] + matchEnd[1]
+  const match = matchPositionText(
+    docData.doc,
+    params.position,
+    /(```|~~~|:::){(.*)$/,
+    /^(.*)}/
+  )
+  if (match.before && match.after) {
+    return match.before[2] + match.after[1]
   }
   return null
 }

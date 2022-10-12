@@ -32,6 +32,7 @@ import Token = require("markdown-it/lib/token")
 import frontMatterPlugin = require("markdown-it-front-matter")
 
 import * as dirDict from "./directives.json"
+import * as roleDict from "./roles.json"
 import {
   matchDirectiveName,
   makeDescription,
@@ -218,6 +219,7 @@ class Server {
     if (settings.MdExtensions.includes("colon_fence")) {
       md.use(divPlugin)
     }
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
     md.use(frontMatterPlugin, () => {})
     md.enable("table")
     md.disable(["inline", "text_join"])
@@ -317,7 +319,7 @@ class Server {
         }
       }
       if (token.type === "inline") {
-        const charPreceding = docData.doc.getText({
+        const charsPreceding = docData.doc.getText({
           start: {
             line: textDocumentPosition.position.line,
             character: textDocumentPosition.position.character - 2
@@ -327,7 +329,7 @@ class Server {
             character: textDocumentPosition.position.character
           }
         })
-        if (charPreceding === "](") {
+        if (charsPreceding === "](") {
           for (const name of docData.targets) {
             completionItems.push({
               label: name,
@@ -335,8 +337,7 @@ class Server {
               data: "myst.targets"
             })
           }
-        }
-        if (charPreceding === "][") {
+        } else if (charsPreceding === "][") {
           for (const name in docData.definitions) {
             const data = docData.definitions[name]
             completionItems.push({
@@ -344,6 +345,15 @@ class Server {
               kind: CompletionItemKind.Reference,
               documentation: data.href,
               data: "myst.definition"
+            })
+          }
+        } else if (charsPreceding[1] == "{") {
+          const dict: { [key: string]: { name: string } } = roleDict
+          for (const name in roleDict) {
+            completionItems.push({
+              label: name,
+              kind: CompletionItemKind.Function,
+              data: "myst.role"
             })
           }
         }
@@ -363,10 +373,15 @@ class Server {
 
     for (const index of indexes) {
       const token = docData.tokens[index]
+
+      if (!token.map) {
+        continue
+      }
+
+      // Hover over a directive name
       if (
-        token.map &&
-        params.position.line === token.map[0] &&
-        (token.type === "fence" || token.type === "div_open")
+        (token.type === "fence" || token.type === "div_open") &&
+        params.position.line === token.map[0]
       ) {
         const name = matchDirectiveName(docData, params)
         if (name) {
@@ -384,8 +399,7 @@ class Server {
     return null
   }
 
-  // This handler resolves additional information for the item selected in
-  // the completion list.
+  // This handler resolves additional information for the item selected in the completion list.
   onCompletionResolve(item: CompletionItem): CompletionItem {
     if (item.data === "myst.directive") {
       const dict: { [key: string]: { name: string } } = dirDict

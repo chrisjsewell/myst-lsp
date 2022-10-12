@@ -1,0 +1,137 @@
+{
+  "abbr": { "name": "abbr", "module": "sphinx.roles" },
+  "abbreviation": {
+    "name": "abbreviation",
+    "module": "docutils.parsers.rst.roles"
+  },
+  "acronym": { "name": "acronym", "module": "docutils.parsers.rst.roles" },
+  "anonymous-reference": {
+    "name": "anonymous-reference",
+    "module": "docutils.parsers.rst.roles"
+  },
+  "any": { "name": "any", "module": "sphinx.roles" },
+  "citation-reference": {
+    "name": "citation-reference",
+    "module": "docutils.parsers.rst.roles"
+  },
+  "code": { "name": "code", "module": "docutils.parsers.rst.roles" },
+  "command": { "name": "command", "module": "docutils.parsers.rst.roles" },
+  "dfn": { "name": "dfn", "module": "docutils.parsers.rst.roles" },
+  "download": { "name": "download", "module": "sphinx.roles" },
+  "emphasis": { "name": "emphasis", "module": "docutils.parsers.rst.roles" },
+  "eq": { "name": "eq", "module": "sphinx.domains.math" },
+  "file": { "name": "file", "module": "sphinx.roles" },
+  "footnote-reference": {
+    "name": "footnote-reference",
+    "module": "docutils.parsers.rst.roles"
+  },
+  "guilabel": { "name": "guilabel", "module": "sphinx.roles" },
+  "index": { "name": "index", "module": "sphinx.domains.index" },
+  "kbd": { "name": "kbd", "module": "docutils.parsers.rst.roles" },
+  "literal": { "name": "literal", "module": "docutils.parsers.rst.roles" },
+  "mailheader": {
+    "name": "mailheader",
+    "module": "docutils.parsers.rst.roles"
+  },
+  "makevar": { "name": "makevar", "module": "docutils.parsers.rst.roles" },
+  "manpage": { "name": "manpage", "module": "docutils.parsers.rst.roles" },
+  "math": { "name": "math", "module": "docutils.parsers.rst.roles" },
+  "menuselection": { "name": "menuselection", "module": "sphinx.roles" },
+  "mimetype": { "name": "mimetype", "module": "docutils.parsers.rst.roles" },
+  "named-reference": {
+    "name": "named-reference",
+    "module": "docutils.parsers.rst.roles"
+  },
+  "newsgroup": { "name": "newsgroup", "module": "docutils.parsers.rst.roles" },
+  "pep": { "name": "pep", "module": "docutils.parsers.rst.roles" },
+  "pep-reference": {
+    "name": "pep-reference",
+    "module": "docutils.parsers.rst.roles"
+  },
+  "program": { "name": "program", "module": "docutils.parsers.rst.roles" },
+  "raw": { "name": "raw", "module": "docutils.parsers.rst.roles" },
+  "regexp": { "name": "regexp", "module": "docutils.parsers.rst.roles" },
+  "restructuredtext-unimplemented-role": {
+    "name": "restructuredtext-unimplemented-role",
+    "module": "docutils.parsers.rst.roles"
+  },
+  "rfc": { "name": "rfc", "module": "docutils.parsers.rst.roles" },
+  "rfc-reference": {
+    "name": "rfc-reference",
+    "module": "docutils.parsers.rst.roles"
+  },
+  "samp": { "name": "samp", "module": "sphinx.roles" },
+  "strong": { "name": "strong", "module": "docutils.parsers.rst.roles" },
+  "subscript": { "name": "subscript", "module": "docutils.parsers.rst.roles" },
+  "substitution-reference": {
+    "name": "substitution-reference",
+    "module": "docutils.parsers.rst.roles"
+  },
+  "superscript": {
+    "name": "superscript",
+    "module": "docutils.parsers.rst.roles"
+  },
+  "target": { "name": "target", "module": "docutils.parsers.rst.roles" },
+  "title-reference": {
+    "name": "title-reference",
+    "module": "docutils.parsers.rst.roles"
+  },
+  "uri-reference": {
+    "name": "uri-reference",
+    "module": "docutils.parsers.rst.roles"
+  },
+  "c:data": { "name": "c:data", "module": "sphinx.domains.c" },
+  "c:enum": { "name": "c:enum", "module": "sphinx.domains.c" },
+  "c:enumerator": { "name": "c:enumerator", "module": "sphinx.domains.c" },
+  "c:expr": { "name": "c:expr", "module": "sphinx.domains.c" },
+  "c:func": { "name": "c:func", "module": "sphinx.domains.c" },
+  "c:macro": { "name": "c:macro", "module": "sphinx.domains.c" },
+  "c:member": { "name": "c:member", "module": "sphinx.domains.c" },
+  "c:struct": { "name": "c:struct", "module": "sphinx.domains.c" },
+  "c:texpr": { "name": "c:texpr", "module": "sphinx.domains.c" },
+  "c:type": { "name": "c:type", "module": "sphinx.domains.c" },
+  "c:union": { "name": "c:union", "module": "sphinx.domains.c" },
+  "c:var": { "name": "c:var", "module": "sphinx.domains.c" },
+  "cpp:any": { "name": "cpp:any", "module": "sphinx.domains.cpp" },
+  "cpp:class": { "name": "cpp:class", "module": "sphinx.domains.cpp" },
+  "cpp:concept": { "name": "cpp:concept", "module": "sphinx.domains.cpp" },
+  "cpp:enum": { "name": "cpp:enum", "module": "sphinx.domains.cpp" },
+  "cpp:enumerator": {
+    "name": "cpp:enumerator",
+    "module": "sphinx.domains.cpp"
+  },
+  "cpp:expr": { "name": "cpp:expr", "module": "sphinx.domains.cpp" },
+  "cpp:func": { "name": "cpp:func", "module": "sphinx.domains.cpp" },
+  "cpp:member": { "name": "cpp:member", "module": "sphinx.domains.cpp" },
+  "cpp:struct": { "name": "cpp:struct", "module": "sphinx.domains.cpp" },
+  "cpp:texpr": { "name": "cpp:texpr", "module": "sphinx.domains.cpp" },
+  "cpp:type": { "name": "cpp:type", "module": "sphinx.domains.cpp" },
+  "cpp:union": { "name": "cpp:union", "module": "sphinx.domains.cpp" },
+  "cpp:var": { "name": "cpp:var", "module": "sphinx.domains.cpp" },
+  "js:attr": { "name": "js:attr", "module": "sphinx.domains.javascript" },
+  "js:class": { "name": "js:class", "module": "sphinx.domains.javascript" },
+  "js:data": { "name": "js:data", "module": "sphinx.domains.javascript" },
+  "js:func": { "name": "js:func", "module": "sphinx.domains.javascript" },
+  "js:meth": { "name": "js:meth", "module": "sphinx.domains.javascript" },
+  "js:mod": { "name": "js:mod", "module": "sphinx.domains.javascript" },
+  "math:numref": { "name": "math:numref", "module": "sphinx.domains.math" },
+  "py:attr": { "name": "py:attr", "module": "sphinx.domains.python" },
+  "py:class": { "name": "py:class", "module": "sphinx.domains.python" },
+  "py:const": { "name": "py:const", "module": "sphinx.domains.python" },
+  "py:data": { "name": "py:data", "module": "sphinx.domains.python" },
+  "py:exc": { "name": "py:exc", "module": "sphinx.domains.python" },
+  "py:func": { "name": "py:func", "module": "sphinx.domains.python" },
+  "py:meth": { "name": "py:meth", "module": "sphinx.domains.python" },
+  "py:mod": { "name": "py:mod", "module": "sphinx.domains.python" },
+  "py:obj": { "name": "py:obj", "module": "sphinx.domains.python" },
+  "rst:dir": { "name": "rst:dir", "module": "sphinx.roles" },
+  "rst:role": { "name": "rst:role", "module": "sphinx.roles" },
+  "doc": { "name": "std:doc", "module": "sphinx.roles" },
+  "envvar": { "name": "std:envvar", "module": "sphinx.domains.std" },
+  "keyword": { "name": "std:keyword", "module": "sphinx.roles" },
+  "numref": { "name": "std:numref", "module": "sphinx.roles" },
+  "option": { "name": "std:option", "module": "sphinx.domains.std" },
+  "ref": { "name": "std:ref", "module": "sphinx.roles" },
+  "term": { "name": "std:term", "module": "sphinx.roles" },
+  "token": { "name": "std:token", "module": "sphinx.domains.std" }
+}

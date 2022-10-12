@@ -1,4 +1,3 @@
-(dsf)=
 # myst-lsp
 
 A Language Server Protocol provider for MyST Markdown.
@@ -14,11 +13,12 @@ This was originally adapted from <https://github.com/microsoft/vscode-extension-
 ├── package.json // The extension manifest.
 └── server // Language Server
 |   └── src
-|       └── server.ts // Language Server entry point
+|       ├── server.ts // Language Server entry point
+|       └── ...
 └── vscode-client // VS Code Language Client
     └── src
-        ├── test // End to End tests for Language Client / Server
-        └── extension.ts // Language Client entry point
+        ├── extension.ts // Language Client entry point
+        └── test // End to End tests for Language Client / Server
 ```
 
 ### Launching in VS Code
