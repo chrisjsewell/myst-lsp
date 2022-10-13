@@ -30,7 +30,7 @@ import { TextDocument } from "vscode-languageserver-textdocument"
 import loki from "lokijs"
 
 import MarkdownIt = require("markdown-it")
-import Token = require("markdown-it/lib/token")
+import Token from "markdown-it/lib/token"
 import frontMatterPlugin = require("markdown-it-front-matter")
 
 import * as dirDict from "./directives.json"
@@ -213,6 +213,7 @@ class Server {
     this.connection.onCompletionResolve(this.onCompletionResolve.bind(this))
     this.connection.onHover(this.onHover.bind(this))
     this.connection.onFoldingRanges(this.onFoldingRanges.bind(this))
+    this.connection.languages.semanticTokens.on(this.onSemanticTokens.bind(this))
 
     // Make the text document manager listen on the connection
     // for open, change and close text document events
@@ -248,12 +249,16 @@ class Server {
           triggerCharacters: ["{", "[", "("]
         },
         foldingRangeProvider: true,
-        hoverProvider: true
-        // notebookDocumentSync: {
-        // 	notebookSelector: [{
-        // 		cells: [{ language: 'markdown'}]
-        // 	}]
-        // }
+        hoverProvider: true,
+        semanticTokensProvider: {
+          documentSelector: null,
+          legend: {
+            tokenTypes: ["class", "property"],
+            tokenModifiers: ["static", "declaration"]
+          },
+          full: true,
+          range: false
+        }
       }
     }
     if (this.hasWorkspaceFolderCapability) {
@@ -526,6 +531,64 @@ class Server {
       item.documentation = makeDescription(data)
     }
     return item
+  }
+
+  onSemanticTokens(params: SemanticTokensParams): SemanticTokens {
+    // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_semanticTokens
+    const data = this.cache.getData(params.textDocument.uri)
+    const doc = this.documents.get(params.textDocument.uri)
+    if (!data || !doc) {
+      return {
+        data: []
+      }
+    }
+    // format is flattened [deltaLine, deltaStartChar, length, tokenType, tokenModifiers]
+    const tokens: number[] = []
+    let lastLine = 0
+    for (const token of data.tokens) {
+      if (!token.map) {
+        continue
+      }
+      // color all directive names
+      if (token.type === "fence" || token.type === "div_open") {
+        const line = doc.getText({
+          start: { line: token.map[0], character: 0 },
+          end: { line: token.map[0], character: 1000 }
+        })
+        const match = line.match(/(`{3,}|~{3,}|:{3,}){([^}]+)}/)
+        if (match) {
+          tokens.push(
+            token.map[0] - lastLine,
+            (match.index || 0) + match[1].length + 1,
+            match[2].length,
+            0,
+            0
+          )
+          lastLine = token.map[0]
+        }
+      }
+      // color all myst_target names
+      if (token.type === "myst_target") {
+        const line = doc.getText({
+          start: { line: token.map[0], character: 0 },
+          end: { line: token.map[0], character: 1000 }
+        })
+        const match = line.match(/\(([^)]+)\)/)
+        if (match) {
+          tokens.push(
+            token.map[0] - lastLine,
+            (match.index || 0) + 1,
+            match[1].length,
+            1,
+            1
+          )
+          lastLine = token.map[0]
+        }
+      }
+    }
+    return {
+      data: tokens
+    }
   }
 }
 
