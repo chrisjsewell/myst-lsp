@@ -23,7 +23,9 @@ import {
   InitializedParams,
   SemanticTokensParams,
   SemanticTokens,
-  FileChangeType
+  FileChangeType,
+  NotebookDocuments,
+  NotebookDocument
 } from "vscode-languageserver/node"
 import { TextDocument } from "vscode-languageserver-textdocument"
 
@@ -42,6 +44,7 @@ import {
 } from "./directiveUtils"
 import { mystBlocksPlugin } from "./mdPluginMyst"
 import { divPlugin } from "./mdPluginDiv"
+import { NotebookDocumentChangeEvent } from "vscode-languageserver/lib/common/notebook"
 
 interface ServerSettings {
   /** The tokens to apply folding to */
@@ -70,22 +73,46 @@ interface ICacheData {
 
 // A cache of data for open documents
 class DocCache {
-  private data: Map<string, ICacheData>
   private settings: Map<string, Thenable<ServerSettings>>
+  private data: Map<string, ICacheData>
+  private parentToChildUri: Map<string, Set<string>>
 
   constructor() {
-    this.data = new Map()
     this.settings = new Map()
+    this.data = new Map()
+    this.parentToChildUri = new Map()
   }
 
   removeUri(uri: string) {
-    this.data.delete(uri)
     this.settings.delete(uri)
+    this.data.delete(uri)
+    // remove children in parentToChildUri
+    for (const [parent, children] of this.parentToChildUri) {
+      if (children.has(uri)) {
+        children.delete(uri)
+        if (children.size === 0) {
+          this.parentToChildUri.delete(parent)
+        }
+      }
+    }
+    // remove all children of parent
+    this.parentToChildUri.get(uri)?.forEach(child => {
+      this.data.delete(child)
+      this.settings.delete(child)
+    })
+    this.parentToChildUri.delete(uri)
   }
 
   clear() {
     this.data.clear()
     this.settings.clear()
+  }
+
+  setParentToChildUri(parentUri: string, childUri: string) {
+    if (!this.parentToChildUri.has(parentUri)) {
+      this.parentToChildUri.set(parentUri, new Set())
+    }
+    this.parentToChildUri.get(parentUri)?.add(childUri)
   }
 
   setSettings(uri: string, settings: Thenable<ServerSettings>) {
@@ -109,17 +136,33 @@ class DocCache {
   }
 
   *iterDefs(uri: string, distinct = true): IterableIterator<IDefinition> {
+    const defs: IDefinition[] = []
     const data = this.data.get(uri)
     if (data) {
-      const yielded = new Set<string>()
-      for (const def of data.defs) {
-        if (distinct && yielded.has(def.key)) {
-          continue
-        } else if (distinct) {
-          yielded.add(def.key)
+      defs.push(...data.defs)
+    }
+    // check if uri is child of parent
+    // if so add all defs from parent
+    for (const [parent, children] of this.parentToChildUri) {
+      if (children.has(uri)) {
+        for (const child of children || []) {
+          if (child !== uri) {
+            const data = this.data.get(child)
+            if (data) {
+              defs.push(...data.defs)
+            }
+          }
         }
-        yield def
       }
+    }
+    const yielded = new Set<string>()
+    for (const def of defs) {
+      if (distinct && yielded.has(def.key)) {
+        continue
+      } else if (distinct) {
+        yielded.add(def.key)
+      }
+      yield def
     }
   }
 }
@@ -162,6 +205,7 @@ class Server {
   cache: DocCache
   db: projectDatabase
   documents: TextDocuments<TextDocument>
+  notebooks: NotebookDocuments<TextDocument>
 
   constructor() {
     this.hasConfigurationCapability = false
@@ -191,23 +235,32 @@ class Server {
     // Create a connection for the server, using Node's IPC as a transport.
     // Also include all preview / proposed LSP features.
     this.connection = createConnection(ProposedFeatures.all)
-
     // Create a simple text document manager.
     this.documents = new TextDocuments(TextDocument)
+    this.notebooks = new NotebookDocuments(TextDocument)
 
     this.connection.onInitialize(this.onInitialize.bind(this))
     this.connection.onInitialized(this.onInitialized.bind(this))
+
+    // configuration synchronisation
     this.connection.onDidChangeConfiguration(this.onDidChangeConfiguration.bind(this))
-    this.connection.onDidCloseTextDocument(e => {
-      this.cache.removeUri(e.textDocument.uri)
+
+    // text document synchronisation
+    // TODO whats the difference with this.connection.onDidCloseTextDocument, etc
+    this.documents.onDidClose(e => {
+      this.cache.removeUri(e.document.uri)
     })
-    // TODO whats the difference with onDidCloseTextDocument
-    // this.documents.onDidClose(e => {
-    //   this.cache.removeUri(e.document.uri)
-    // })
+    this.documents.onDidOpen(this.onDocOpen.bind(this))
+    this.documents.onDidChangeContent(this.onDocChange.bind(this))
+
+    // notebook synchronisation
+    this.notebooks.onDidClose(e => {
+      this.cache.removeUri(e.uri)
+    })
+    this.notebooks.onDidOpen(this.onNbOpen.bind(this))
+    this.notebooks.onDidChange(this.onNbChange.bind(this))
 
     // Features
-    this.documents.onDidChangeContent(this.onDidChangeContent.bind(this))
     this.connection.onDidChangeWatchedFiles(this.onDidChangeWatchedFiles.bind(this))
     this.connection.onCompletion(this.onCompletion.bind(this))
     this.connection.onCompletionResolve(this.onCompletionResolve.bind(this))
@@ -215,9 +268,10 @@ class Server {
     this.connection.onFoldingRanges(this.onFoldingRanges.bind(this))
     this.connection.languages.semanticTokens.on(this.onSemanticTokens.bind(this))
 
-    // Make the text document manager listen on the connection
+    // Make the text document managers listen on the connection
     // for open, change and close text document events
     this.documents.listen(this.connection)
+    this.notebooks.listen(this.connection)
 
     // Listen on the connection
     this.connection.listen()
@@ -243,7 +297,14 @@ class Server {
     const result: InitializeResult = {
       capabilities: {
         textDocumentSync: TextDocumentSyncKind.Incremental,
-        // Tell the client that this server supports code completion.
+        notebookDocumentSync: {
+          notebookSelector: [
+            {
+              notebook: { scheme: "file", notebookType: "jupyter-notebook" },
+              cells: [{ language: "markdown" }]
+            }
+          ]
+        },
         completionProvider: {
           resolveProvider: true,
           triggerCharacters: ["{", "[", "("]
@@ -309,10 +370,25 @@ class Server {
       this.globalSettings = change.settings.languageServerMyst || this.defaultSettings
     }
 
-    // Re-parse all open text documents
-    this.documents.all().forEach(this.parseTextDocument.bind(this))
+    // Re-parse all open documents
+    for (const doc of this.documents.all()) {
+      this.parseTextDocument(doc)
+    }
+    for (const doc of this.notebooks.cellTextDocuments.all()) {
+      this.parseTextDocument(doc)
+      const nb = this.notebooks.findNotebookDocumentForCell(doc.uri)
+      if (nb) {
+        this.cache.setParentToChildUri(nb.uri, doc.uri)
+      }
+    }
   }
 
+  /** Parse a text document
+   *
+   * @param textDocument The text document to parse
+   * @param parentUri The uri of the parent document, if any
+   *                  (e.g. a notebook cell will have a parent notebook URI)
+   */
   async parseTextDocument(textDocument: TextDocument): Promise<void> {
     // For now we simply get the settings for every parse.
     const settings = await this.getDocumentSettings(textDocument.uri)
@@ -372,8 +448,69 @@ class Server {
     )
   }
 
+  onDocOpen(change: TextDocumentChangeEvent<TextDocument>) {
+    // doc open also triggers onDocChange, so nothing to do here
+  }
+
+  onDocChange(change: TextDocumentChangeEvent<TextDocument>) {
+    this.parseTextDocument(change.document)
+  }
+
+  onNbOpen(nb: NotebookDocument) {
+    for (const cell of nb.cells) {
+      const cellDoc = this.notebooks.getCellTextDocument(cell)
+      if (cellDoc) {
+        this.parseTextDocument(cellDoc)
+        this.cache.setParentToChildUri(nb.uri, cellDoc.uri)
+      }
+    }
+  }
+
+  onNbChange(change: NotebookDocumentChangeEvent) {
+    if (!change.cells) {
+      return
+    }
+    for (const cell of change.cells.removed) {
+      this.cache.removeUri(cell.document)
+    }
+    for (const cell of change.cells.added) {
+      const cellDoc = this.notebooks.getCellTextDocument(cell)
+      if (cellDoc) {
+        this.parseTextDocument(cellDoc)
+        this.cache.setParentToChildUri(change.notebookDocument.uri, cellDoc.uri)
+      }
+    }
+    for (const cell of change.cells.changed.textContent) {
+      const cellDoc = this.notebooks.getCellTextDocument(cell)
+      if (cellDoc) {
+        this.parseTextDocument(cellDoc)
+      }
+    }
+  }
+
+  // Monitored files have changed
+  onDidChangeWatchedFiles(change: DidChangeWatchedFilesParams) {
+    for (const file of change.changes) {
+      if (file.type === FileChangeType.Deleted) {
+        this.db.removeUri(file.uri)
+      }
+    }
+  }
+
+  getDocument(uri: string): TextDocument | undefined {
+    const doc = this.documents.get(uri)
+    if (doc) {
+      return doc
+    }
+    const cell = this.notebooks.getNotebookCell(uri)
+    if (cell) {
+      return this.notebooks.getCellTextDocument(cell)
+    }
+    return undefined
+  }
+
   async onFoldingRanges(params: FoldingRangeParams): Promise<FoldingRange[]> {
-    const textDocument = this.documents.get(params.textDocument.uri)
+    const textDocument = this.getDocument(params.textDocument.uri)
     if (!textDocument) {
       return []
     }
@@ -393,29 +530,12 @@ class Server {
     return foldingRanges
   }
 
-  // The content of a text document has changed. This event is emitted
-  // when the text document first opened or when its content has changed.
-  onDidChangeContent(change: TextDocumentChangeEvent<TextDocument>) {
-    this.parseTextDocument(change.document)
-  }
-
-  // Monitored files have changed
-  onDidChangeWatchedFiles(change: DidChangeWatchedFilesParams) {
-    for (const file of change.changes) {
-      if (file.type === FileChangeType.Deleted) {
-        this.db.removeUri(file.uri)
-      }
-    }
-    // this.connection.console.log(`Received onDidChangeWatchedFiles event: ${change.changes}`)
-  }
-
   // This handler provides the initial list of the completion items.
   onCompletion(textDocumentPosition: TextDocumentPositionParams): CompletionItem[] {
     // The pass parameter contains the position of the text document in
     // which code complete got requested. For the example we ignore this
     // info and always provide the same completion items.
-
-    const doc = this.documents.get(textDocumentPosition.textDocument.uri)
+    let doc = this.getDocument(textDocumentPosition.textDocument.uri)
     const docData = this.cache.getData(textDocumentPosition.textDocument.uri)
     if (!docData || !doc) {
       return []
@@ -456,7 +576,7 @@ class Server {
             completionItems.push({
               label: `${target.name}`,
               documentation: `${target.uri}::${target.line}`,
-              kind: CompletionItemKind.Reference,
+              kind: CompletionItemKind.Variable,
               data: "myst.targets"
             })
           }
@@ -487,7 +607,7 @@ class Server {
   }
 
   onHover(params: TextDocumentPositionParams): Hover | null {
-    const doc = this.documents.get(params.textDocument.uri)
+    const doc = this.getDocument(params.textDocument.uri)
     const docData = this.cache.getData(params.textDocument.uri)
     if (!docData || !doc) {
       return null
@@ -536,7 +656,7 @@ class Server {
   onSemanticTokens(params: SemanticTokensParams): SemanticTokens {
     // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_semanticTokens
     const data = this.cache.getData(params.textDocument.uri)
-    const doc = this.documents.get(params.textDocument.uri)
+    const doc = this.getDocument(params.textDocument.uri)
     if (!data || !doc) {
       return {
         data: []
