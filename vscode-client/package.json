@@ -9,7 +9,7 @@
     "url": "https://github.com/executablebooks/myst-lsp"
   },
   "dependencies": {
-    "vscode-languageclient": "^7.0.0"
+    "vscode-languageclient": "^8.0.2"
   },
   "devDependencies": {
     "@types/vscode": "^1.66.0",

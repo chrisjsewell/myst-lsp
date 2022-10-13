@@ -12,13 +12,17 @@
     "url": "https://github.com/executablebooks/myst-lsp"
   },
   "dependencies": {
-    "@types/js-yaml": "^4.0.5",
-    "@types/markdown-it": "^12.2.3",
     "js-yaml": "^4.1.0",
+    "lokijs": "^1.5.12",
     "markdown-it": "^13.0.1",
     "markdown-it-front-matter": "^0.2.3",
     "vscode-languageserver": "^8.0.2",
     "vscode-languageserver-textdocument": "^1.0.4"
   },
-  "scripts": {}
+  "scripts": {},
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.5",
+    "@types/lokijs": "^1.5.7",
+    "@types/markdown-it": "^12.2.3"
+  }
 }

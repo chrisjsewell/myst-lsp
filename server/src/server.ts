@@ -21,11 +21,13 @@ import {
   FoldingRangeParams,
   Hover,
   InitializedParams,
-  DocumentHighlight,
   SemanticTokensParams,
-  SemanticTokens
+  SemanticTokens,
+  FileChangeType
 } from "vscode-languageserver/node"
 import { TextDocument } from "vscode-languageserver-textdocument"
+
+import loki from "lokijs"
 
 import MarkdownIt = require("markdown-it")
 import Token = require("markdown-it/lib/token")
@@ -48,12 +50,106 @@ interface ServerSettings {
   MdExtensions: string[]
 }
 
-export interface IDocData {
-  doc: TextDocument
+interface ITargetData {
+  uri: string
+  name: string
+  line: number | null
+}
+
+interface IDefinition {
+  key: string
+  title: string
+  href: string
+}
+
+interface ICacheData {
   tokens: Token[]
-  definitions: { [key: string]: { title: string; href: string } }
-  targets: string[]
   lineToTokenIndex: number[][]
+  defs: IDefinition[]
+}
+
+// A cache of data for open documents
+class DocCache {
+  private data: Map<string, ICacheData>
+  private settings: Map<string, Thenable<ServerSettings>>
+
+  constructor() {
+    this.data = new Map()
+    this.settings = new Map()
+  }
+
+  removeUri(uri: string) {
+    this.data.delete(uri)
+    this.settings.delete(uri)
+  }
+
+  clear() {
+    this.data.clear()
+    this.settings.clear()
+  }
+
+  setSettings(uri: string, settings: Thenable<ServerSettings>) {
+    this.settings.set(uri, settings)
+  }
+
+  getSettings(uri: string): Thenable<ServerSettings> | undefined {
+    return this.settings.get(uri)
+  }
+
+  clearSettings() {
+    this.settings.clear()
+  }
+
+  setData(uri: string, data: ICacheData) {
+    this.data.set(uri, data)
+  }
+
+  getData(uri: string): ICacheData | undefined {
+    return this.data.get(uri)
+  }
+
+  *iterDefs(uri: string, distinct = true): IterableIterator<IDefinition> {
+    const data = this.data.get(uri)
+    if (data) {
+      const yielded = new Set<string>()
+      for (const def of data.defs) {
+        if (distinct && yielded.has(def.key)) {
+          continue
+        } else if (distinct) {
+          yielded.add(def.key)
+        }
+        yield def
+      }
+    }
+  }
+}
+
+// A database for storing document data for the whole project
+class projectDatabase {
+  private db: loki
+  private targets: loki.Collection<ITargetData>
+  constructor() {
+    this.db = new loki("data.db")
+    this.targets = this.db.addCollection("targets")
+  }
+  removeUri(uri: string) {
+    this.targets.findAndRemove({ uri })
+  }
+  insertTargets(targets: ITargetData[]) {
+    this.targets.insert(targets)
+  }
+  *iterTargets(distinct = true, filter = {}): IterableIterator<ITargetData> {
+    const yielded = new Set<string>()
+    for (const target of this.targets.find(filter)) {
+      if (distinct) {
+        if (yielded.has(target.name)) {
+          continue
+        }
+        yielded.add(target.name)
+      }
+      yield target
+    }
+  }
 }
 
 class Server {
@@ -63,14 +159,17 @@ class Server {
   hasDiagnosticRelatedInformationCapability: boolean
   defaultSettings: ServerSettings
   globalSettings: ServerSettings
-  documentSettings: Map<string, Thenable<ServerSettings>>
-  documentData: Map<string, IDocData>
+  cache: DocCache
+  db: projectDatabase
   documents: TextDocuments<TextDocument>
 
   constructor() {
     this.hasConfigurationCapability = false
     this.hasWorkspaceFolderCapability = false
     this.hasDiagnosticRelatedInformationCapability = false
+
+    this.cache = new DocCache()
+    this.db = new projectDatabase()
 
     this.defaultSettings = {
       MdExtensions: ["colon_fence"],
@@ -88,10 +187,6 @@ class Server {
     }
     // The global settings, used when the `workspace/configuration` request is not supported by the client.
     this.globalSettings = this.defaultSettings
-    // Cache the settings of all open documents
-    this.documentSettings = new Map()
-
-    this.documentData = new Map()
 
     // Create a connection for the server, using Node's IPC as a transport.
     // Also include all preview / proposed LSP features.
@@ -103,11 +198,13 @@ class Server {
     this.connection.onInitialize(this.onInitialize.bind(this))
     this.connection.onInitialized(this.onInitialized.bind(this))
     this.connection.onDidChangeConfiguration(this.onDidChangeConfiguration.bind(this))
-    // Only keep settings for open documents
-    this.documents.onDidClose(e => {
-      this.documentSettings.delete(e.document.uri)
-      this.documentData.delete(e.document.uri)
+    this.connection.onDidCloseTextDocument(e => {
+      this.cache.removeUri(e.textDocument.uri)
     })
+    // TODO whats the difference with onDidCloseTextDocument
+    // this.documents.onDidClose(e => {
+    //   this.cache.removeUri(e.document.uri)
+    // })
 
     // Features
     this.documents.onDidChangeContent(this.onDidChangeContent.bind(this))
@@ -152,6 +249,11 @@ class Server {
         },
         foldingRangeProvider: true,
         hoverProvider: true
+        // notebookDocumentSync: {
+        // 	notebookSelector: [{
+        // 		cells: [{ language: 'markdown'}]
+        // 	}]
+        // }
       }
     }
     if (this.hasWorkspaceFolderCapability) {
@@ -180,25 +282,24 @@ class Server {
     }
   }
 
-  getDocumentSettings(resource: string): Thenable<ServerSettings> {
+  getDocumentSettings(uri: string): Thenable<ServerSettings> {
     if (!this.hasConfigurationCapability) {
       return Promise.resolve(this.globalSettings)
     }
-    let result = this.documentSettings.get(resource)
+    let result = this.cache.getSettings(uri)
     if (!result) {
       result = this.connection.workspace.getConfiguration({
-        scopeUri: resource,
+        scopeUri: uri,
         section: "languageServerMyst"
       })
-      this.documentSettings.set(resource, result)
+      this.cache.setSettings(uri, result)
     }
     return result
   }
 
   onDidChangeConfiguration(change: DidChangeConfigurationParams) {
     if (this.hasConfigurationCapability) {
-      // Reset all cached document settings
-      this.documentSettings.clear()
+      this.cache.clear()
     } else {
       this.globalSettings = change.settings.languageServerMyst || this.defaultSettings
     }
@@ -245,14 +346,25 @@ class Server {
         lineToTokenIndex[j].push(i)
       }
     }
-
-    this.documentData.set(textDocument.uri, {
-      doc: textDocument,
-      tokens: tokens,
-      definitions: env.references,
-      targets: tokens.filter(t => t.type === "myst_target").map(t => t.content),
-      lineToTokenIndex: lineToTokenIndex
+    const references = Object.entries(env.references).map(([k, v]) => {
+      return { key: k, href: v.href, title: v.title }
     })
+    this.cache.setData(textDocument.uri, {
+      tokens: tokens,
+      lineToTokenIndex: lineToTokenIndex,
+      defs: references
+    })
+    this.db.insertTargets(
+      tokens
+        .filter(t => t.type === "myst_target")
+        .map(t => {
+          return {
+            name: t.content,
+            uri: textDocument.uri,
+            line: t.map ? t.map[0] : null
+          }
+        })
+    )
   }
 
   async onFoldingRanges(params: FoldingRangeParams): Promise<FoldingRange[]> {
@@ -260,9 +372,12 @@ class Server {
     if (!textDocument) {
       return []
     }
-    const settings = await this.getDocumentSettings(textDocument.uri)
+    const settings = await this.cache.getSettings(textDocument.uri)
+    if (!settings) {
+      return []
+    }
     const foldingRanges: FoldingRange[] = []
-    for (const token of this.documentData.get(textDocument.uri)?.tokens || []) {
+    for (const token of this.cache.getData(textDocument.uri)?.tokens || []) {
       if (token.map && settings.foldingTokens.includes(token.type)) {
         foldingRanges.push({
           startLine: token.map[0],
@@ -276,13 +391,17 @@ class Server {
   // The content of a text document has changed. This event is emitted
   // when the text document first opened or when its content has changed.
   onDidChangeContent(change: TextDocumentChangeEvent<TextDocument>) {
-    // console.log(`Received onDidChangeContent event: ${change.document.uri}`)
     this.parseTextDocument(change.document)
   }
 
   // Monitored files have changed
   onDidChangeWatchedFiles(change: DidChangeWatchedFilesParams) {
-    // console.log(`Received onDidChangeWatchedFiles event: ${change.changes}`)
+    for (const file of change.changes) {
+      if (file.type === FileChangeType.Deleted) {
+        this.db.removeUri(file.uri)
+      }
+    }
+    // this.connection.console.log(`Received onDidChangeWatchedFiles event: ${change.changes}`)
   }
 
   // This handler provides the initial list of the completion items.
@@ -291,8 +410,9 @@ class Server {
     // which code complete got requested. For the example we ignore this
     // info and always provide the same completion items.
 
-    const docData = this.documentData.get(textDocumentPosition.textDocument.uri)
-    if (!docData) {
+    const doc = this.documents.get(textDocumentPosition.textDocument.uri)
+    const docData = this.cache.getData(textDocumentPosition.textDocument.uri)
+    if (!docData || !doc) {
       return []
     }
 
@@ -306,20 +426,17 @@ class Server {
         textDocumentPosition.position.line === token.map[0] &&
         (token.type === "fence" || token.type === "div_open")
       ) {
-        if (matchDirectiveStart(docData, textDocumentPosition)) {
-          const dict: { [key: string]: { name: string } } = dirDict
+        if (matchDirectiveStart(doc, textDocumentPosition)) {
           for (const name in dirDict) {
-            const data = dict[name]
             completionItems.push({
-              label: data.name,
+              label: name,
               kind: CompletionItemKind.Class,
               data: "myst.directive"
             })
           }
         }
-      }
-      if (token.type === "inline") {
-        const charsPreceding = docData.doc.getText({
+      } else if (token.type === "inline" && doc) {
+        const charsPreceding = doc.getText({
           start: {
             line: textDocumentPosition.position.line,
             character: textDocumentPosition.position.character - 2
@@ -330,25 +447,27 @@ class Server {
           }
         })
         if (charsPreceding === "](") {
-          for (const name of docData.targets) {
+          for (const target of this.db.iterTargets()) {
             completionItems.push({
-              label: name,
+              label: `${target.name}`,
+              documentation: `${target.uri}::${target.line}`,
               kind: CompletionItemKind.Reference,
               data: "myst.targets"
             })
           }
         } else if (charsPreceding === "][") {
-          for (const name in docData.definitions) {
-            const data = docData.definitions[name]
+          for (const data of this.cache.iterDefs(
+            textDocumentPosition.textDocument.uri,
+            true
+          )) {
             completionItems.push({
-              label: name,
+              label: data.key,
               kind: CompletionItemKind.Reference,
               documentation: data.href,
               data: "myst.definition"
             })
           }
         } else if (charsPreceding[1] == "{") {
-          const dict: { [key: string]: { name: string } } = roleDict
           for (const name in roleDict) {
             completionItems.push({
               label: name,
@@ -359,13 +478,13 @@ class Server {
         }
       }
     }
-
     return completionItems
   }
 
   onHover(params: TextDocumentPositionParams): Hover | null {
-    const docData = this.documentData.get(params.textDocument.uri)
-    if (!docData) {
+    const doc = this.documents.get(params.textDocument.uri)
+    const docData = this.cache.getData(params.textDocument.uri)
+    if (!docData || !doc) {
       return null
     }
 
@@ -383,7 +502,7 @@ class Server {
         (token.type === "fence" || token.type === "div_open") &&
         params.position.line === token.map[0]
       ) {
-        const name = matchDirectiveName(docData, params)
+        const name = matchDirectiveName(doc, params)
         if (name) {
           const dict: { [key: string]: { name: string } } = dirDict
           const data = dict[name]

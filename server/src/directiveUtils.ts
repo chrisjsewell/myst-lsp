@@ -1,8 +1,8 @@
 import { MarkupContent, MarkupKind } from "vscode-languageserver/node"
+import { TextDocumentPositionParams } from "vscode-languageserver/node"
+import { TextDocument } from "vscode-languageserver-textdocument"
 import * as yaml from "js-yaml"
 
-import { TextDocumentPositionParams } from "vscode-languageserver/node"
-import { IDocData } from "./server"
 import { matchPositionText } from "./utils"
 
 /** Make a markdown description for a directive */
@@ -21,11 +21,11 @@ export function makeDescription(data: any): MarkupContent {
 
 /** Match the start of a directive */
 export function matchDirectiveStart(
-  docData: IDocData,
+  doc: TextDocument,
   textDocumentPosition: TextDocumentPositionParams
 ): boolean {
   const match = matchPositionText(
-    docData.doc,
+    doc,
     textDocumentPosition.position,
     /(```|~~~|:::){$/,
     null
@@ -35,15 +35,10 @@ export function matchDirectiveStart(
 
 /** Match position in the text to a directive name, e.g. ```{name} */
 export function matchDirectiveName(
-  docData: IDocData,
+  doc: TextDocument,
   params: TextDocumentPositionParams
 ): string | null {
-  const match = matchPositionText(
-    docData.doc,
-    params.position,
-    /(```|~~~|:::){(.*)$/,
-    /^(.*)}/
-  )
+  const match = matchPositionText(doc, params.position, /(```|~~~|:::){(.*)$/, /^(.*)}/)
   if (match.before && match.after) {
     return match.before[2] + match.after[1]
   }

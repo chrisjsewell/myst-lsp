@@ -35,7 +35,10 @@ export function activate(context: ExtensionContext) {
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
     // Register the server for markdown documents
-    documentSelector: [{ scheme: "file", language: "markdown" }],
+    documentSelector: [
+      { scheme: "file", language: "markdown" },
+      { notebook: "*", language: "markdown" }
+    ],
     synchronize: {
       // Notify the server about file changes to '.clientrc files contained in the workspace
       fileEvents: workspace.createFileSystemWatcher("**/.clientrc")

@@ -68,19 +68,21 @@ See <https://github.com/jupyter-lsp/jupyterlab-lsp>
 
 ## TODO / Notes
 
-- [ ] folding rang for headings
+- [ ] folding range for headings
 - [ ] diagnostics if heading levels are not sequential
-- [ ] background reading of all files in the workspace (to populate targets lookup)
-- [ ] markdown-it-front-matter plugin sets wrong map (uses `pos` instead of `nextLine`)
+- [ ] background reading of all files in the workspace (to populate targets lookup etc)
+- [ ] parsing of directive options, which could then be used to add to targets lookup (i.e. for any `name` option)
+- [ ] markdown-it-front-matter plugin sets wrong map (uses `pos` instead of `nextLine`) which causes wrong folding range etc
 
 ### Jupyterlab-lsp
 
-- How do stop `.md` files from being opened as `ipythongfm`?
-- How do you trigger completions with with key-bindings (e.g. with VS Code is `ctrl+space`)?
+- [ ] How do stop `.md` files from being opened as `ipythongfm`?
+- [ ] How do you trigger completions with with key-bindings (e.g. with VS Code is `ctrl+space`)?
   - edit: I managed to get it to activate a few times with after writing `:::{not`, but seems very temperamental?
   - actually it seems to work fine with `[` and `(`, but not with `{`
-- Enabling for notebooks (coming in v4.0?)
+  - it also seems to break sometimes, e.g. for targets if you don't add `break` in loop
+- [ ] Enabling for notebooks (coming in v4.0?)
 
 ### VS Code
 
-- Enabling for notebooks
+- [x] Enabling for notebooks
