@@ -3,8 +3,7 @@
  * ------------------------------------------------------------------------------------------ */
 
 import * as path from "path"
-import { workspace, ExtensionContext } from "vscode"
-
+import { ExtensionContext, workspace } from "vscode"
 import {
   LanguageClient,
   LanguageClientOptions,
@@ -38,16 +37,15 @@ export function activate(context: ExtensionContext) {
     documentSelector: [
       { scheme: "file", language: "markdown" },
       { notebook: "*", language: "markdown" }
-    ],
-    synchronize: {
-      // Notify the server about file changes to '.clientrc files contained in the workspace
-      fileEvents: workspace.createFileSystemWatcher("**/.clientrc")
-    }
+    ]
+    // synchronize: {
+    //   fileEvents: workspace.createFileSystemWatcher("**/*.md")
+    // }
   }
 
   // Create the language client and start the client.
   client = new LanguageClient(
-    "languageServerMyst",
+    "myst.lsp",
     "Language Server MyST",
     serverOptions,
     clientOptions

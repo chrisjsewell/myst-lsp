@@ -1,7 +1,10 @@
-import { MarkupContent, MarkupKind } from "vscode-languageserver/node"
-import { TextDocumentPositionParams } from "vscode-languageserver/node"
-import { TextDocument } from "vscode-languageserver-textdocument"
 import * as yaml from "js-yaml"
+import {
+  MarkupContent,
+  MarkupKind,
+  TextDocumentPositionParams
+} from "vscode-languageserver/node"
+import { TextDocument } from "vscode-languageserver-textdocument"
 
 import { matchPositionText } from "./utils"
 
@@ -23,14 +26,14 @@ export function makeDescription(data: any): MarkupContent {
 export function matchDirectiveStart(
   doc: TextDocument,
   textDocumentPosition: TextDocumentPositionParams
-): boolean {
+): null | { partial: string } {
   const match = matchPositionText(
     doc,
     textDocumentPosition.position,
-    /(```|~~~|:::){$/,
+    /(```|~~~|:::){([^{]*)$/,
     null
   )
-  return !!match.before
+  return match?.before ? { partial: match.before[2] } : null
 }
 
 /** Match position in the text to a directive name, e.g. ```{name} */

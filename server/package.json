@@ -12,7 +12,9 @@
     "url": "https://github.com/executablebooks/myst-lsp"
   },
   "dependencies": {
+    "fast-glob": "^3.2.12",
     "js-yaml": "^4.1.0",
+    "jsonschema": "^1.4.1",
     "lokijs": "^1.5.12",
     "markdown-it": "^13.0.1",
     "markdown-it-front-matter": "^0.2.3",

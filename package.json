@@ -28,13 +28,13 @@
     "@types/node": "^16.11.7",
     "@typescript-eslint/eslint-plugin": "^5.30.0",
     "@typescript-eslint/parser": "^5.30.0",
-    "mocha": "^9.2.1",
-    "typescript": "^4.8.4",
     "eslint": "^8.13.0",
     "eslint-config-prettier": "^8.3.0",
-    "eslint-plugin-import": "^2.25.4",
     "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-prettier": "^4.0.0"
+    "eslint-plugin-prettier": "^4.0.0",
+    "eslint-plugin-simple-import-sort": "^8.0.0",
+    "mocha": "^9.2.1",
+    "typescript": "^4.8.4"
   },
   "engines": {
     "vscode": "^1.66.0"
@@ -47,49 +47,7 @@
     "configuration": {
       "type": "object",
       "title": "MyST LSP configuration",
-      "properties": {
-        "languageServerMyst.MdExtensions": {
-          "scope": "resource",
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "colon_fence"
-          ],
-          "description": "Control which MyST extensions to use."
-        },
-        "languageServerMyst.foldingTokens": {
-          "scope": "resource",
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "paragraph_open",
-            "blockquote_open",
-            "bullet_list_open",
-            "ordered_list_open",
-            "code_block",
-            "fence",
-            "html_block",
-            "table_open",
-            "div_open"
-          ],
-          "description": "Control which block tokens produce folding ranges."
-        },
-        "languageServerMyst.trace.server": {
-          "scope": "window",
-          "type": "string",
-          "enum": [
-            "off",
-            "messages",
-            "verbose"
-          ],
-          "default": "off",
-          "description": "Traces the communication between VS Code and the language server."
-        }
-      }
+      "properties": {}
     }
   }
 }

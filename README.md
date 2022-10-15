@@ -2,11 +2,16 @@
 
 A Language Server Protocol provider for MyST Markdown.
 
+## Usage
+
+### Completions
+
+Note that by default, VS-Code uses `CTRL+SPACE` to trigger completions,
+whereas JupyterLab uses `Tab` to trigger completions.
+
 ## Development
 
 ### Repository structure
-
-This was originally adapted from <https://github.com/microsoft/vscode-extension-samples/tree/main/lsp-sample>
 
 ```
 .
@@ -44,11 +49,11 @@ See <https://github.com/jupyter-lsp/jupyterlab-lsp>
 {
   "LanguageServerManager": {
     "language_servers": {
-      "myst-language-server-implementation": {
+      "myst-lsp": {
         "version": 2,
         "argv": ["/path/to/myst-lsp/server/out/server.js", "--stdio"],
-        "languages": ["Markdown"],
-        "mime_types": ["text/markdown"],
+        "languages": ["ipythongfm"],
+        "mime_types": ["text/x-markdown"],
         "display_name": "MyST LSP server"
       }
     }
@@ -71,18 +76,354 @@ See <https://github.com/jupyter-lsp/jupyterlab-lsp>
 - [ ] folding range for headings
 - [ ] diagnostics if heading levels are not sequential
 - [ ] background reading of all files in the workspace (to populate targets lookup etc)
+  - [x] text files
+  - [ ] notebooks (how to get the correct uri for a cell?)
 - [ ] parsing of directive options, which could then be used to add to targets lookup (i.e. for any `name` option)
 - [ ] markdown-it-front-matter plugin sets wrong map (uses `pos` instead of `nextLine`) which causes wrong folding range etc
+- [ ] workspace support (e.g. for targets lookup)
+- [ ] use the client's file watcher for `myst.yml`, if the client supports it
+- [ ] watch all files in project (and reparse), or just assume that the only files changing are those sent by the client?
+- [ ] intersphinx support
+- [ ] doi hover (and other links/autolinks?)
 
 ### Jupyterlab-lsp
 
 - [ ] How do stop `.md` files from being opened as `ipythongfm`?
-- [ ] How do you trigger completions with with key-bindings (e.g. with VS Code is `ctrl+space`)?
-  - edit: I managed to get it to activate a few times with after writing `:::{not`, but seems very temperamental?
-  - actually it seems to work fine with `[` and `(`, but not with `{`
-  - it also seems to break sometimes, e.g. for targets if you don't add `break` in loop
+  - <https://github.com/jupyterlab/jupyterlab/issues/4223>
 - [ ] Enabling for notebooks (coming in v4.0?)
 
 ### VS Code
 
 - [x] Enabling for notebooks
+
+### Current Feature Support
+
+As of jupyterlab-lsp v3.10.2, `InitializeParams` returns:
+
+```json
+{
+  "capabilities": {
+    "textDocument": {
+      "synchronization": {
+        "dynamicRegistration": true,
+        "willSave": false,
+        "didSave": true,
+        "willSaveWaitUntil": false
+      },
+      "completion": {
+        "dynamicRegistration": true,
+        "completionItem": {
+          "snippetSupport": false,
+          "commitCharactersSupport": true,
+          "documentationFormat": ["markdown", "plaintext"],
+          "deprecatedSupport": true,
+          "preselectSupport": false,
+          "tagSupport": { "valueSet": [1] }
+        },
+        "contextSupport": false
+      },
+      "signatureHelp": {
+        "dynamicRegistration": true,
+        "signatureInformation": {
+          "documentationFormat": ["markdown", "plaintext"]
+        }
+      },
+      "hover": {
+        "dynamicRegistration": true,
+        "contentFormat": ["markdown", "plaintext"]
+      },
+      "publishDiagnostics": { "tagSupport": { "valueSet": [2, 1] } },
+      "declaration": { "dynamicRegistration": true, "linkSupport": true },
+      "definition": { "dynamicRegistration": true, "linkSupport": true },
+      "typeDefinition": { "dynamicRegistration": true, "linkSupport": true },
+      "implementation": { "dynamicRegistration": true, "linkSupport": true }
+    },
+    "workspace": { "didChangeConfiguration": { "dynamicRegistration": true } }
+  },
+  "processId": null,
+  "rootUri": "file:///Users/chrisjsewell/Documents/GitHub/myst-lsp",
+  "workspaceFolders": null,
+  "initializationOptions": null
+}
+```
+
+As of vscode 1.72, `InitializeParams` returns:
+
+```json
+{
+  "processId": 10069,
+  "clientInfo": { "name": "Visual Studio Code", "version": "1.72.0" },
+  "locale": "en-gb",
+  "rootPath": "/Users/chrisjsewell/Documents/GitHub/vscode_extension_test_folder",
+  "rootUri": "file:///Users/chrisjsewell/Documents/GitHub/vscode_extension_test_folder",
+  "capabilities": {
+    "workspace": {
+      "applyEdit": true,
+      "workspaceEdit": {
+        "documentChanges": true,
+        "resourceOperations": ["create", "rename", "delete"],
+        "failureHandling": "textOnlyTransactional",
+        "normalizesLineEndings": true,
+        "changeAnnotationSupport": { "groupsOnLabel": true }
+      },
+      "configuration": true,
+      "didChangeWatchedFiles": {
+        "dynamicRegistration": true,
+        "relativePatternSupport": true
+      },
+      "symbol": {
+        "dynamicRegistration": true,
+        "symbolKind": {
+          "valueSet": [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+            22, 23, 24, 25, 26
+          ]
+        },
+        "tagSupport": { "valueSet": [1] },
+        "resolveSupport": { "properties": ["location.range"] }
+      },
+      "codeLens": { "refreshSupport": true },
+      "executeCommand": { "dynamicRegistration": true },
+      "didChangeConfiguration": { "dynamicRegistration": true },
+      "workspaceFolders": true,
+      "semanticTokens": { "refreshSupport": true },
+      "fileOperations": {
+        "dynamicRegistration": true,
+        "didCreate": true,
+        "didRename": true,
+        "didDelete": true,
+        "willCreate": true,
+        "willRename": true,
+        "willDelete": true
+      },
+      "inlineValue": { "refreshSupport": true },
+      "inlayHint": { "refreshSupport": true },
+      "diagnostics": { "refreshSupport": true }
+    },
+    "textDocument": {
+      "publishDiagnostics": {
+        "relatedInformation": true,
+        "versionSupport": false,
+        "tagSupport": { "valueSet": [1, 2] },
+        "codeDescriptionSupport": true,
+        "dataSupport": true
+      },
+      "synchronization": {
+        "dynamicRegistration": true,
+        "willSave": true,
+        "willSaveWaitUntil": true,
+        "didSave": true
+      },
+      "completion": {
+        "dynamicRegistration": true,
+        "contextSupport": true,
+        "completionItem": {
+          "snippetSupport": true,
+          "commitCharactersSupport": true,
+          "documentationFormat": ["markdown", "plaintext"],
+          "deprecatedSupport": true,
+          "preselectSupport": true,
+          "tagSupport": { "valueSet": [1] },
+          "insertReplaceSupport": true,
+          "resolveSupport": {
+            "properties": ["documentation", "detail", "additionalTextEdits"]
+          },
+          "insertTextModeSupport": { "valueSet": [1, 2] },
+          "labelDetailsSupport": true
+        },
+        "insertTextMode": 2,
+        "completionItemKind": {
+          "valueSet": [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+            22, 23, 24, 25
+          ]
+        },
+        "completionList": {
+          "itemDefaults": [
+            "commitCharacters",
+            "editRange",
+            "insertTextFormat",
+            "insertTextMode"
+          ]
+        }
+      },
+      "hover": {
+        "dynamicRegistration": true,
+        "contentFormat": ["markdown", "plaintext"]
+      },
+      "signatureHelp": {
+        "dynamicRegistration": true,
+        "signatureInformation": {
+          "documentationFormat": ["markdown", "plaintext"],
+          "parameterInformation": { "labelOffsetSupport": true },
+          "activeParameterSupport": true
+        },
+        "contextSupport": true
+      },
+      "definition": { "dynamicRegistration": true, "linkSupport": true },
+      "references": { "dynamicRegistration": true },
+      "documentHighlight": { "dynamicRegistration": true },
+      "documentSymbol": {
+        "dynamicRegistration": true,
+        "symbolKind": {
+          "valueSet": [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+            22, 23, 24, 25, 26
+          ]
+        },
+        "hierarchicalDocumentSymbolSupport": true,
+        "tagSupport": { "valueSet": [1] },
+        "labelSupport": true
+      },
+      "codeAction": {
+        "dynamicRegistration": true,
+        "isPreferredSupport": true,
+        "disabledSupport": true,
+        "dataSupport": true,
+        "resolveSupport": { "properties": ["edit"] },
+        "codeActionLiteralSupport": {
+          "codeActionKind": {
+            "valueSet": [
+              "",
+              "quickfix",
+              "refactor",
+              "refactor.extract",
+              "refactor.inline",
+              "refactor.rewrite",
+              "source",
+              "source.organizeImports"
+            ]
+          }
+        },
+        "honorsChangeAnnotations": false
+      },
+      "codeLens": { "dynamicRegistration": true },
+      "formatting": { "dynamicRegistration": true },
+      "rangeFormatting": { "dynamicRegistration": true },
+      "onTypeFormatting": { "dynamicRegistration": true },
+      "rename": {
+        "dynamicRegistration": true,
+        "prepareSupport": true,
+        "prepareSupportDefaultBehavior": 1,
+        "honorsChangeAnnotations": true
+      },
+      "documentLink": { "dynamicRegistration": true, "tooltipSupport": true },
+      "typeDefinition": { "dynamicRegistration": true, "linkSupport": true },
+      "implementation": { "dynamicRegistration": true, "linkSupport": true },
+      "colorProvider": { "dynamicRegistration": true },
+      "foldingRange": {
+        "dynamicRegistration": true,
+        "rangeLimit": 5000,
+        "lineFoldingOnly": true,
+        "foldingRangeKind": { "valueSet": ["comment", "imports", "region"] },
+        "foldingRange": { "collapsedText": false }
+      },
+      "declaration": { "dynamicRegistration": true, "linkSupport": true },
+      "selectionRange": { "dynamicRegistration": true },
+      "callHierarchy": { "dynamicRegistration": true },
+      "semanticTokens": {
+        "dynamicRegistration": true,
+        "tokenTypes": [
+          "namespace",
+          "type",
+          "class",
+          "enum",
+          "interface",
+          "struct",
+          "typeParameter",
+          "parameter",
+          "variable",
+          "property",
+          "enumMember",
+          "event",
+          "function",
+          "method",
+          "macro",
+          "keyword",
+          "modifier",
+          "comment",
+          "string",
+          "number",
+          "regexp",
+          "operator",
+          "decorator"
+        ],
+        "tokenModifiers": [
+          "declaration",
+          "definition",
+          "readonly",
+          "static",
+          "deprecated",
+          "abstract",
+          "async",
+          "modification",
+          "documentation",
+          "defaultLibrary"
+        ],
+        "formats": ["relative"],
+        "requests": { "range": true, "full": { "delta": true } },
+        "multilineTokenSupport": false,
+        "overlappingTokenSupport": false,
+        "serverCancelSupport": true,
+        "augmentsSyntaxTokens": true
+      },
+      "linkedEditingRange": { "dynamicRegistration": true },
+      "typeHierarchy": { "dynamicRegistration": true },
+      "inlineValue": { "dynamicRegistration": true },
+      "inlayHint": {
+        "dynamicRegistration": true,
+        "resolveSupport": {
+          "properties": [
+            "tooltip",
+            "textEdits",
+            "label.tooltip",
+            "label.location",
+            "label.command"
+          ]
+        }
+      },
+      "diagnostic": {
+        "dynamicRegistration": true,
+        "relatedDocumentSupport": false
+      }
+    },
+    "window": {
+      "showMessage": {
+        "messageActionItem": { "additionalPropertiesSupport": true }
+      },
+      "showDocument": { "support": true },
+      "workDoneProgress": true
+    },
+    "general": {
+      "staleRequestSupport": {
+        "cancel": true,
+        "retryOnContentModified": [
+          "textDocument/semanticTokens/full",
+          "textDocument/semanticTokens/range",
+          "textDocument/semanticTokens/full/delta"
+        ]
+      },
+      "regularExpressions": { "engine": "ECMAScript", "version": "ES2020" },
+      "markdown": { "parser": "marked", "version": "1.1.0" },
+      "positionEncodings": ["utf-16"]
+    },
+    "notebookDocument": {
+      "synchronization": {
+        "dynamicRegistration": true,
+        "executionSummarySupport": true
+      }
+    }
+  },
+  "trace": "off",
+  "workspaceFolders": [
+    {
+      "uri": "file:///Users/chrisjsewell/Documents/GitHub/vscode_extension_test_folder",
+      "name": "vscode_extension_test_folder"
+    }
+  ]
+}
+```
+
+## Acknowledgements
+
+This was originally adapted from <https://github.com/microsoft/vscode-extension-samples/tree/main/lsp-sample>

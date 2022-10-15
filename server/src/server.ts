@@ -2,61 +2,77 @@
 /* --------------------------------------------------------------------------------------------
  * Licensed under the MIT License. See License file in the project root for license information.
  * ------------------------------------------------------------------------------------------ */
+import glob from "fast-glob"
+import fs from "fs"
+import yaml from "js-yaml"
+import { validate } from "jsonschema"
+import loki from "lokijs"
+import MarkdownIt from "markdown-it"
+import Token from "markdown-it/lib/token"
+import frontMatterPlugin from "markdown-it-front-matter"
+import path from "path"
+import url from "url"
+import { NotebookDocumentChangeEvent } from "vscode-languageserver/lib/common/notebook"
 import {
-  createConnection,
-  TextDocuments,
-  ProposedFeatures,
-  InitializeParams,
-  DidChangeConfigurationNotification,
+  _Connection,
   CompletionItem,
   CompletionItemKind,
-  TextDocumentPositionParams,
-  TextDocumentSyncKind,
-  InitializeResult,
-  _Connection,
-  DidChangeConfigurationParams,
+  createConnection,
+  Definition,
+  DefinitionParams,
   DidChangeWatchedFilesParams,
-  TextDocumentChangeEvent,
+  FileChangeType,
   FoldingRange,
   FoldingRangeParams,
   Hover,
   InitializedParams,
-  SemanticTokensParams,
-  SemanticTokens,
-  FileChangeType,
+  InitializeParams,
+  InitializeResult,
+  NotebookDocument,
   NotebookDocuments,
-  NotebookDocument
+  Position,
+  ProposedFeatures,
+  SemanticTokens,
+  SemanticTokensParams,
+  TextDocumentChangeEvent,
+  TextDocumentPositionParams,
+  TextDocuments,
+  TextDocumentSyncKind,
+  TextEdit
 } from "vscode-languageserver/node"
 import { TextDocument } from "vscode-languageserver-textdocument"
 
-import loki from "lokijs"
-
-import MarkdownIt = require("markdown-it")
-import Token from "markdown-it/lib/token"
-import frontMatterPlugin = require("markdown-it-front-matter")
-
 import * as dirDict from "./directives.json"
-import * as roleDict from "./roles.json"
 import {
-  matchDirectiveName,
   makeDescription,
+  matchDirectiveName,
   matchDirectiveStart
 } from "./directiveUtils"
-import { mystBlocksPlugin } from "./mdPluginMyst"
 import { divPlugin } from "./mdPluginDiv"
-import { NotebookDocumentChangeEvent } from "vscode-languageserver/lib/common/notebook"
+import { mystBlocksPlugin } from "./mdPluginMyst"
+import * as roleDict from "./roles.json"
+import { getLine, matchReferenceLink } from "./utils"
 
-interface ServerSettings {
-  /** The tokens to apply folding to */
-  foldingTokens: string[]
-  /** Markdown-it extensions */
-  MdExtensions: string[]
+interface ServerConfig {
+  files: {
+    text: string[]
+    notebook: string[]
+    ignore: string[]
+  }
+  parsing: {
+    /** Markdown-it extensions */
+    extensions: string[]
+  }
+  lsp: {
+    /** The tokens to apply folding to */
+    foldingTokens: string[]
+  }
 }
 
 interface ITargetData {
   uri: string
   name: string
-  line: number | null
+  line: number
 }
 
 interface IDefinition {
@@ -73,18 +89,17 @@ interface ICacheData {
 
 // A cache of data for open documents
 class DocCache {
-  private settings: Map<string, Thenable<ServerSettings>>
   private data: Map<string, ICacheData>
+  // map of parentUri to set of childUris
+  // used for cells of a notebook
   private parentToChildUri: Map<string, Set<string>>
 
   constructor() {
-    this.settings = new Map()
     this.data = new Map()
     this.parentToChildUri = new Map()
   }
 
   removeUri(uri: string) {
-    this.settings.delete(uri)
     this.data.delete(uri)
     // remove children in parentToChildUri
     for (const [parent, children] of this.parentToChildUri) {
@@ -98,14 +113,12 @@ class DocCache {
     // remove all children of parent
     this.parentToChildUri.get(uri)?.forEach(child => {
       this.data.delete(child)
-      this.settings.delete(child)
     })
     this.parentToChildUri.delete(uri)
   }
 
   clear() {
     this.data.clear()
-    this.settings.clear()
   }
 
   setParentToChildUri(parentUri: string, childUri: string) {
@@ -113,18 +126,6 @@ class DocCache {
       this.parentToChildUri.set(parentUri, new Set())
     }
     this.parentToChildUri.get(parentUri)?.add(childUri)
-  }
-
-  setSettings(uri: string, settings: Thenable<ServerSettings>) {
-    this.settings.set(uri, settings)
-  }
-
-  getSettings(uri: string): Thenable<ServerSettings> | undefined {
-    return this.settings.get(uri)
-  }
-
-  clearSettings() {
-    this.settings.clear()
   }
 
   setData(uri: string, data: ICacheData) {
@@ -175,12 +176,19 @@ class projectDatabase {
     this.db = new loki("data.db")
     this.targets = this.db.addCollection("targets")
   }
+  clear() {
+    this.targets.clear()
+  }
   removeUri(uri: string) {
     this.targets.findAndRemove({ uri })
   }
   insertTargets(targets: ITargetData[]) {
     this.targets.insert(targets)
   }
+  getTargets(name: string): ITargetData[] {
+    return this.targets.find({ name })
+  }
+
   *iterTargets(distinct = true, filter = {}): IterableIterator<ITargetData> {
     const yielded = new Set<string>()
     for (const target of this.targets.find(filter)) {
@@ -197,40 +205,35 @@ class projectDatabase {
 
 class Server {
   connection: _Connection
-  hasConfigurationCapability: boolean
-  hasWorkspaceFolderCapability: boolean
-  hasDiagnosticRelatedInformationCapability: boolean
-  defaultSettings: ServerSettings
-  globalSettings: ServerSettings
-  cache: DocCache
-  db: projectDatabase
+  // Store client side information provided on initialization (e.g. capabilities)
+  clientParams: InitializeParams
+  // specific client side capabilities
+  clientCapabilities: {
+    workspacesFolders: boolean
+    diagnosticRelatedInfo: boolean
+  }
+  // open documents managers
   documents: TextDocuments<TextDocument>
   notebooks: NotebookDocuments<TextDocument>
+  // the cache stores data for only open documents
+  cache: DocCache
+  // the database stores data for the whole project
+  db: projectDatabase
+
+  // the current configuration, based on defaults and user settings
+  config: ServerConfig
 
   constructor() {
-    this.hasConfigurationCapability = false
-    this.hasWorkspaceFolderCapability = false
-    this.hasDiagnosticRelatedInformationCapability = false
+    this.config = this.getDefaultConfig().defaults
+
+    this.clientCapabilities = {
+      workspacesFolders: false,
+      diagnosticRelatedInfo: false
+    }
+    this.clientParams = {} as InitializeParams
 
     this.cache = new DocCache()
     this.db = new projectDatabase()
-
-    this.defaultSettings = {
-      MdExtensions: ["colon_fence"],
-      foldingTokens: [
-        "paragraph_open",
-        "blockquote_open",
-        "bullet_list_open",
-        "ordered_list_open",
-        "code_block",
-        "fence",
-        "html_block",
-        "table_open",
-        "div_open"
-      ]
-    }
-    // The global settings, used when the `workspace/configuration` request is not supported by the client.
-    this.globalSettings = this.defaultSettings
 
     // Create a connection for the server, using Node's IPC as a transport.
     // Also include all preview / proposed LSP features.
@@ -242,11 +245,7 @@ class Server {
     this.connection.onInitialize(this.onInitialize.bind(this))
     this.connection.onInitialized(this.onInitialized.bind(this))
 
-    // configuration synchronisation
-    this.connection.onDidChangeConfiguration(this.onDidChangeConfiguration.bind(this))
-
     // text document synchronisation
-    // TODO whats the difference with this.connection.onDidCloseTextDocument, etc
     this.documents.onDidClose(e => {
       this.cache.removeUri(e.document.uri)
     })
@@ -266,6 +265,7 @@ class Server {
     this.connection.onCompletionResolve(this.onCompletionResolve.bind(this))
     this.connection.onHover(this.onHover.bind(this))
     this.connection.onFoldingRanges(this.onFoldingRanges.bind(this))
+    this.connection.onDefinition(this.onDefinition.bind(this))
     this.connection.languages.semanticTokens.on(this.onSemanticTokens.bind(this))
 
     // Make the text document managers listen on the connection
@@ -277,18 +277,131 @@ class Server {
     this.connection.listen()
   }
 
-  onInitialize(params: InitializeParams) {
-    const capabilities = params.capabilities
+  getDefaultConfig(): { defaults: ServerConfig; schema: any } {
+    return {
+      defaults: {
+        files: {
+          text: ["**/*.md"],
+          notebook: ["**/*.ipynb"],
+          ignore: [
+            "**/node_modules/**",
+            "**/.git/**",
+            "**/.tox/**",
+            "**/.venv/**",
+            "**/_build/**"
+          ]
+        },
+        parsing: {
+          extensions: ["colon_fence"]
+        },
+        lsp: {
+          foldingTokens: [
+            "paragraph_open",
+            "blockquote_open",
+            "bullet_list_open",
+            "ordered_list_open",
+            "code_block",
+            "fence",
+            "html_block",
+            "table_open",
+            "div_open"
+          ]
+        }
+      },
+      schema: {
+        type: "object",
+        properties: {
+          files: {
+            type: "object",
+            properties: {
+              text: {
+                type: "array",
+                items: {
+                  type: "string"
+                }
+              },
+              notebook: {
+                type: "array",
+                items: {
+                  type: "string"
+                }
+              },
+              ignore: {
+                type: "array",
+                items: {
+                  type: "string"
+                }
+              }
+            }
+          },
+          parsing: {
+            type: "object",
+            properties: {
+              extensions: {
+                type: "array",
+                items: {
+                  type: "string"
+                }
+              }
+            }
+          },
+          lsp: {
+            type: "object",
+            properties: {
+              foldingTokens: {
+                type: "array",
+                items: {
+                  type: "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 
-    // Does the client support the `workspace/configuration` request?
-    // If not, we fall back using global settings.
-    this.hasConfigurationCapability = !!(
-      capabilities.workspace && !!capabilities.workspace.configuration
-    )
-    this.hasWorkspaceFolderCapability = !!(
+  async updateConfig(newConfig: any) {
+    const { defaults, schema } = this.getDefaultConfig()
+    const result = validate(newConfig, schema)
+    if (!result.valid) {
+      this.connection.console.error(`Invalid configuration: ${result.errors}`)
+      return
+    }
+    for (const [sectionKey, section] of Object.entries(newConfig)) {
+      if (sectionKey in defaults) {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        const defaultSection = defaults[sectionKey]
+        for (const [key, value] of Object.entries(section as object)) {
+          if (key in defaultSection) {
+            defaultSection[key] = value
+          }
+        }
+      }
+    }
+    let requiresReanalysis = false
+    if (defaults.files !== this.config.files) {
+      requiresReanalysis = true
+    }
+    if (defaults.parsing.extensions !== this.config.parsing.extensions) {
+      requiresReanalysis = true
+    }
+    this.config = defaults
+    if (requiresReanalysis) {
+      await this.analyzeProject()
+    }
+  }
+
+  onInitialize(params: InitializeParams) {
+    this.clientParams = params
+
+    // Check what capabilities the client supports
+    const capabilities = params.capabilities
+    this.clientCapabilities.workspacesFolders = !!(
       capabilities.workspace && !!capabilities.workspace.workspaceFolders
     )
-    this.hasDiagnosticRelatedInformationCapability = !!(
+    this.clientCapabilities.diagnosticRelatedInfo = !!(
       capabilities.textDocument &&
       capabilities.textDocument.publishDiagnostics &&
       capabilities.textDocument.publishDiagnostics.relatedInformation
@@ -311,6 +424,7 @@ class Server {
         },
         foldingRangeProvider: true,
         hoverProvider: true,
+        definitionProvider: true,
         semanticTokensProvider: {
           documentSelector: null,
           legend: {
@@ -322,83 +436,133 @@ class Server {
         }
       }
     }
-    if (this.hasWorkspaceFolderCapability) {
-      result.capabilities.workspace = {
-        workspaceFolders: {
-          supported: true
-        }
-      }
+    if (this.clientCapabilities.workspacesFolders) {
+      // TODO add support for workspace folders (e.g. when analysing projects)
+      //   result.capabilities.workspace = {
+      //     workspaceFolders: {
+      //       supported: true
+      //     }
+      //   }
     }
 
     return result
   }
 
-  onInitialized(params: InitializedParams) {
-    if (this.hasConfigurationCapability) {
-      // Register for all configuration changes.
-      this.connection.client.register(
-        DidChangeConfigurationNotification.type,
-        undefined
+  async onInitialized(params: InitializedParams) {
+    // set up file watcher for configuration file
+    // Note here we use our own config file rather than one supplied by the client
+    // because we want to have a single config work for all clients, and also all myst tools in general
+    // we also could have the client watch the file: https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_didChangeWatchedFiles
+    // however, in particular jupyterlab-lsp does not support this yet
+    // TODO use the client's file watcher, if the client supports it
+    if (this.clientParams.rootUri) {
+      const watcher = fs.watchFile(
+        path.join(url.fileURLToPath(this.clientParams.rootUri), "myst.yml"),
+        async (curr: fs.Stats, prev: fs.Stats) => {
+          // check if file deleted
+          let newConfig: any = {}
+          if (
+            curr.size !== 0 &&
+            curr.mtime !== prev.mtime &&
+            this.clientParams.rootUri
+          ) {
+            try {
+              newConfig = yaml.load(
+                fs.readFileSync(
+                  path.join(url.fileURLToPath(this.clientParams.rootUri), "myst.yml"),
+                  "utf8"
+                )
+              ) as any
+            } catch (e) {
+              this.connection.console.error(`Reading myst.yml failed: ${e}`)
+            }
+          }
+          this.updateConfig(newConfig)
+        }
       )
     }
-    if (this.hasWorkspaceFolderCapability) {
-      this.connection.workspace.onDidChangeWorkspaceFolders(_event => {
-        this.connection.console.log("Workspace folder change event received.")
-      })
-    }
+    await this.analyzeProject()
   }
 
-  getDocumentSettings(uri: string): Thenable<ServerSettings> {
-    if (!this.hasConfigurationCapability) {
-      return Promise.resolve(this.globalSettings)
+  async analyzeProject() {
+    // TODO support multiple workfolders
+    const rootUri = this.clientParams.rootUri
+    this.connection.console.log(`Starting analysing project: ${rootUri}`)
+    if (!rootUri) {
+      return
     }
-    let result = this.cache.getSettings(uri)
-    if (!result) {
-      result = this.connection.workspace.getConfiguration({
-        scopeUri: uri,
-        section: "languageServerMyst"
-      })
-      this.cache.setSettings(uri, result)
+    if (!rootUri.startsWith("file://")) {
+      this.connection.console.warn(
+        "Only local files are supported for project analysis"
+      )
+      return
     }
-    return result
+
+    const rootPath = url.fileURLToPath(rootUri)
+    // check if the root path is a directory
+    if (!fs.statSync(rootPath).isDirectory()) {
+      this.connection.console.warn(
+        "Only local directories are supported for project analysis"
+      )
+      return
+    }
+
+    // glob all text based files relative to the root path
+    const filesText = await glob(this.config.files.text, {
+      cwd: rootPath,
+      absolute: true,
+      ignore: this.config.files.ignore
+    })
+
+    const progress = await this.connection.window.createWorkDoneProgress()
+    progress.begin("MyST LSP", 0, "Analysing Project")
+    this.db.clear()
+    for (const [index, file] of filesText.entries()) {
+      progress.report((index / filesText.length) * 100, "Analysing Project")
+      const content = fs.readFileSync(file, "utf-8")
+      const doc = TextDocument.create(
+        url.pathToFileURL(file).toString(),
+        "markdown",
+        0,
+        content
+      )
+      const data = this.parseTextDocument(doc)
+      this.db.insertTargets(data.targets)
+    }
+    progress.done()
+
+    this.connection.console.log(`Finished analysing project: ${rootUri}`)
   }
 
-  onDidChangeConfiguration(change: DidChangeConfigurationParams) {
-    if (this.hasConfigurationCapability) {
-      this.cache.clear()
-    } else {
-      this.globalSettings = change.settings.languageServerMyst || this.defaultSettings
-    }
-
-    // Re-parse all open documents
-    for (const doc of this.documents.all()) {
-      this.parseTextDocument(doc)
-    }
-    for (const doc of this.notebooks.cellTextDocuments.all()) {
-      this.parseTextDocument(doc)
-      const nb = this.notebooks.findNotebookDocumentForCell(doc.uri)
-      if (nb) {
-        this.cache.setParentToChildUri(nb.uri, doc.uri)
-      }
-    }
+  // analyse an open text document, and store the result in the cache
+  async analyseTextDocument(textDocument: TextDocument): Promise<void> {
+    this.db.removeUri(textDocument.uri)
+    this.cache.removeUri(textDocument.uri)
+    const data = this.parseTextDocument(textDocument)
+    this.cache.setData(textDocument.uri, {
+      tokens: data.tokens,
+      lineToTokenIndex: data.lineToTokenIndex,
+      defs: data.definitions
+    })
+    this.db.insertTargets(data.targets)
   }
 
   /** Parse a text document
    *
    * @param textDocument The text document to parse
-   * @param parentUri The uri of the parent document, if any
-   *                  (e.g. a notebook cell will have a parent notebook URI)
    */
-  async parseTextDocument(textDocument: TextDocument): Promise<void> {
-    // For now we simply get the settings for every parse.
-    const settings = await this.getDocumentSettings(textDocument.uri)
-
+  parseTextDocument(textDocument: TextDocument): {
+    tokens: Token[]
+    lineToTokenIndex: number[][]
+    definitions: IDefinition[]
+    targets: ITargetData[]
+  } {
     // The validator creates diagnostics for all uppercase words length 2 and more
     const text = textDocument.getText()
 
     const md = new MarkdownIt("commonmark", {})
     md.use(mystBlocksPlugin)
-    if (settings.MdExtensions.includes("colon_fence")) {
+    if (this.config.parsing.extensions.includes("colon_fence")) {
       md.use(divPlugin)
     }
     // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -427,25 +591,24 @@ class Server {
         lineToTokenIndex[j].push(i)
       }
     }
-    const references = Object.entries(env.references).map(([k, v]) => {
+    const definitions = Object.entries(env.references).map(([k, v]) => {
       return { key: k, href: v.href, title: v.title }
     })
-    this.cache.setData(textDocument.uri, {
-      tokens: tokens,
-      lineToTokenIndex: lineToTokenIndex,
-      defs: references
-    })
-    this.db.insertTargets(
-      tokens
-        .filter(t => t.type === "myst_target")
-        .map(t => {
-          return {
-            name: t.content,
-            uri: textDocument.uri,
-            line: t.map ? t.map[0] : null
-          }
-        })
-    )
+    const targets = tokens
+      .filter(t => t.type === "myst_target" && t.map)
+      .map(t => {
+        return {
+          name: t.content,
+          uri: textDocument.uri,
+          line: t.map ? t.map[0] : 0
+        }
+      })
+    return {
+      tokens,
+      lineToTokenIndex,
+      definitions,
+      targets
+    }
   }
 
   onDocOpen(change: TextDocumentChangeEvent<TextDocument>) {
@@ -453,14 +616,14 @@ class Server {
   }
 
   onDocChange(change: TextDocumentChangeEvent<TextDocument>) {
-    this.parseTextDocument(change.document)
+    this.analyseTextDocument(change.document)
   }
 
   onNbOpen(nb: NotebookDocument) {
     for (const cell of nb.cells) {
       const cellDoc = this.notebooks.getCellTextDocument(cell)
       if (cellDoc) {
-        this.parseTextDocument(cellDoc)
+        this.analyseTextDocument(cellDoc)
         this.cache.setParentToChildUri(nb.uri, cellDoc.uri)
       }
     }
@@ -476,20 +639,21 @@ class Server {
     for (const cell of change.cells.added) {
       const cellDoc = this.notebooks.getCellTextDocument(cell)
       if (cellDoc) {
-        this.parseTextDocument(cellDoc)
+        this.analyseTextDocument(cellDoc)
         this.cache.setParentToChildUri(change.notebookDocument.uri, cellDoc.uri)
       }
     }
     for (const cell of change.cells.changed.textContent) {
       const cellDoc = this.notebooks.getCellTextDocument(cell)
       if (cellDoc) {
-        this.parseTextDocument(cellDoc)
+        this.analyseTextDocument(cellDoc)
       }
     }
   }
 
   // Monitored files have changed
   onDidChangeWatchedFiles(change: DidChangeWatchedFilesParams) {
+    // TODO not currently used
     for (const file of change.changes) {
       if (file.type === FileChangeType.Deleted) {
         this.db.removeUri(file.uri)
@@ -509,18 +673,14 @@ class Server {
     return undefined
   }
 
-  async onFoldingRanges(params: FoldingRangeParams): Promise<FoldingRange[]> {
+  onFoldingRanges(params: FoldingRangeParams): FoldingRange[] {
     const textDocument = this.getDocument(params.textDocument.uri)
     if (!textDocument) {
       return []
     }
-    const settings = await this.cache.getSettings(textDocument.uri)
-    if (!settings) {
-      return []
-    }
     const foldingRanges: FoldingRange[] = []
     for (const token of this.cache.getData(textDocument.uri)?.tokens || []) {
-      if (token.map && settings.foldingTokens.includes(token.type)) {
+      if (token.map && this.config.lsp.foldingTokens.includes(token.type)) {
         foldingRanges.push({
           startLine: token.map[0],
           endLine: token.map[1] - 1
@@ -535,7 +695,7 @@ class Server {
     // The pass parameter contains the position of the text document in
     // which code complete got requested. For the example we ignore this
     // info and always provide the same completion items.
-    let doc = this.getDocument(textDocumentPosition.textDocument.uri)
+    const doc = this.getDocument(textDocumentPosition.textDocument.uri)
     const docData = this.cache.getData(textDocumentPosition.textDocument.uri)
     if (!docData || !doc) {
       return []
@@ -551,59 +711,104 @@ class Server {
         textDocumentPosition.position.line === token.map[0] &&
         (token.type === "fence" || token.type === "div_open")
       ) {
-        if (matchDirectiveStart(doc, textDocumentPosition)) {
+        const matchDir = matchDirectiveStart(doc, textDocumentPosition)
+        if (matchDir) {
           for (const name in dirDict) {
-            completionItems.push({
-              label: name,
-              kind: CompletionItemKind.Class,
-              data: "myst.directive"
-            })
+            if (name.startsWith(matchDir.partial)) {
+              completionItems.push({
+                label: name,
+                kind: CompletionItemKind.Class,
+                detail: "MyST directive",
+                data: "myst.directive",
+                textEdit: completetionTextEdit(
+                  name,
+                  matchDir.partial,
+                  textDocumentPosition.position
+                )
+              })
+            }
           }
         }
-      } else if (token.type === "inline" && doc) {
-        const charsPreceding = doc.getText({
-          start: {
-            line: textDocumentPosition.position.line,
-            character: textDocumentPosition.position.character - 2
-          },
-          end: {
-            line: textDocumentPosition.position.line,
-            character: textDocumentPosition.position.character
-          }
-        })
-        if (charsPreceding === "](") {
-          for (const target of this.db.iterTargets()) {
-            completionItems.push({
-              label: `${target.name}`,
-              documentation: `${target.uri}::${target.line}`,
-              kind: CompletionItemKind.Variable,
-              data: "myst.targets"
-            })
-          }
-        } else if (charsPreceding === "][") {
-          for (const data of this.cache.iterDefs(
+      } else if (token.type === "inline") {
+        const line = getLine(doc, textDocumentPosition.position.line)
+        completionItems.push(
+          ...this.completeInlineCursor(
             textDocumentPosition.textDocument.uri,
-            true
-          )) {
-            completionItems.push({
-              label: data.key,
-              kind: CompletionItemKind.Reference,
-              documentation: data.href,
-              data: "myst.definition"
-            })
-          }
-        } else if (charsPreceding[1] == "{") {
-          for (const name in roleDict) {
-            completionItems.push({
-              label: name,
-              kind: CompletionItemKind.Function,
-              data: "myst.role"
-            })
-          }
-        }
+            textDocumentPosition.position,
+            line
+          )
+        )
       }
     }
     return completionItems
+  }
+
+  /** Identify possible completions for a cursor in an inline block */
+  *completeInlineCursor(
+    uri: string,
+    cursor: Position,
+    content: string
+  ): IterableIterator<CompletionItem> {
+    const before: string = content.slice(0, cursor.character)
+
+    const matchRefLink = before.match(/\]\([<]?([^(]*)$/)
+    if (matchRefLink) {
+      const start = matchRefLink[1]
+      for (const target of this.db.iterTargets()) {
+        if (target.name.startsWith(start)) {
+          yield {
+            label: target.name,
+            kind: CompletionItemKind.Reference,
+            detail: "MyST target",
+            data: "myst.target",
+            textEdit: completetionTextEdit(target.name, start, cursor)
+          }
+        }
+      }
+      return
+    }
+
+    const matchDefLink = before.match(/\]\[([^[]*)$/)
+    if (matchDefLink) {
+      const start = matchDefLink[1]
+      for (const data of this.cache.iterDefs(uri, true)) {
+        yield {
+          label: data.key,
+          kind: CompletionItemKind.Reference,
+          detail: "MyST definition",
+          documentation: data.href,
+          data: "myst.definition",
+          textEdit: completetionTextEdit(data.key, start, cursor)
+        }
+      }
+      return
+    }
+
+    const matchRole = before.match(/\{([a-zA-Z0-9:_-]*)$/)
+    if (matchRole) {
+      const start = matchRole[1]
+      for (const name in roleDict) {
+        if (name.startsWith(start)) {
+          yield {
+            label: name,
+            kind: CompletionItemKind.Function,
+            detail: "MyST role",
+            data: "myst.role",
+            textEdit: completetionTextEdit(name, start, cursor)
+          }
+        }
+      }
+      return
+    }
+  }
+
+  onCompletionResolve(item: CompletionItem): CompletionItem {
+    if (item.data === "myst.directive") {
+      const dict: { [key: string]: { name: string } } = dirDict
+      const data = dict[item.label]
+      item.documentation = makeDescription(data)
+    }
+    return item
   }
 
   onHover(params: TextDocumentPositionParams): Hover | null {
@@ -643,14 +848,33 @@ class Server {
     return null
   }
 
-  // This handler resolves additional information for the item selected in the completion list.
-  onCompletionResolve(item: CompletionItem): CompletionItem {
-    if (item.data === "myst.directive") {
-      const dict: { [key: string]: { name: string } } = dirDict
-      const data = dict[item.label]
-      item.documentation = makeDescription(data)
+  onDefinition(params: DefinitionParams): Definition | null {
+    const doc = this.getDocument(params.textDocument.uri)
+    if (!doc) {
+      return null
     }
-    return item
+    const match = matchReferenceLink(doc, params.position)
+    if (!match) {
+      return null
+    }
+    const targets = this.db.getTargets(match.text)
+    const defs = []
+    for (const target of targets) {
+      defs.push({
+        uri: target.uri,
+        range: {
+          start: {
+            line: target.line,
+            character: 0
+          },
+          end: {
+            line: target.line,
+            character: 10000
+          }
+        }
+      })
+    }
+    return defs
   }
 
   onSemanticTokens(params: SemanticTokensParams): SemanticTokens {
@@ -671,10 +895,7 @@ class Server {
       }
       // color all directive names
       if (token.type === "fence" || token.type === "div_open") {
-        const line = doc.getText({
-          start: { line: token.map[0], character: 0 },
-          end: { line: token.map[0], character: 1000 }
-        })
+        const line = getLine(doc, token.map[0])
         const match = line.match(/(`{3,}|~{3,}|:{3,}){([^}]+)}/)
         if (match) {
           tokens.push(
@@ -689,10 +910,7 @@ class Server {
       }
       // color all myst_target names
       if (token.type === "myst_target") {
-        const line = doc.getText({
-          start: { line: token.map[0], character: 0 },
-          end: { line: token.map[0], character: 1000 }
-        })
+        const line = getLine(doc, token.map[0])
         const match = line.match(/\(([^)]+)\)/)
         if (match) {
           tokens.push(
@@ -708,6 +926,23 @@ class Server {
     }
     return {
       data: tokens
+    }
+  }
+}
+
+function completetionTextEdit(
+  text: string,
+  partial: string,
+  cursor: Position
+): TextEdit {
+  return {
+    newText: text,
+    range: {
+      start: {
+        line: cursor.line,
+        character: cursor.character - partial.length
+      },
+      end: cursor
     }
   }
 }

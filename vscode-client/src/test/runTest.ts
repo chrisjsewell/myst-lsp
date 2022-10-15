@@ -1,9 +1,8 @@
 /*---------------------------------------------------------------------------------------------
  *  Licensed under the MIT License. See License file in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-import * as path from "path"
-
 import { runTests } from "@vscode/test-electron"
+import * as path from "path"
 
 async function main() {
   try {
