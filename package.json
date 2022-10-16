@@ -3,10 +3,10 @@
   "description": "A Language Server Protocol provider for MyST Markdown",
   "author": "Chris Sewell",
   "license": "MIT",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "repository": {
     "type": "git",
-    "url": "https://github.com/executablebooks/myst-lsp"
+    "url": "https://github.com/chrisjsewell/myst-lsp"
   },
   "main": "./vscode-client/out/extension",
   "bin": {

@@ -1,5 +1,10 @@
 # myst-lsp
 
+[![VS Marketplace][vs-market-badge]][vs-market-link]
+
+[vs-market-badge]: https://vsmarketplacebadge.apphb.com/version/chrisjsewell.myst-lsp.svg "Current Release"
+[vs-market-link]: https://marketplace.visualstudio.com/items?itemName=chrisjsewell.myst-lsp
+
 A Language Server Protocol provider for MyST Markdown.
 
 ## Usage

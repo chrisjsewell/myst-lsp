@@ -1,3 +1,8 @@
-.tox/
-.ipynb_checkpoints/
-.virtual_documents/
+.tox/**
+.ipynb_checkpoints/**
+.virtual_documents/**
+.vscode/**
+**/*.ts
+**/*.map
+.gitignore
+**/tsconfig.json
