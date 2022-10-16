@@ -15,7 +15,7 @@ export let platformEol: string
  */
 export async function activate(docUri: vscode.Uri) {
   // The extensionId is `publisher.name` from package.json
-  const ext = vscode.extensions.getExtension("ExecutableBookProject.myst-lsp")!
+  const ext = vscode.extensions.getExtension("chrisjsewell.myst-lsp")!
   await ext.activate()
   try {
     doc = await vscode.workspace.openTextDocument(docUri)

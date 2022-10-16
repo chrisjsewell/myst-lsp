@@ -49,7 +49,7 @@ import {
   matchDirectiveName,
   matchDirectiveStart
 } from "./directiveUtils"
-import { divPlugin } from "./mdPluginDiv"
+import { mystDivPlugin } from "./mdPluginDiv"
 import { mystBlocksPlugin } from "./mdPluginMyst"
 import * as roleDict from "./roles.json"
 import { getLine, matchReferenceLink } from "./utils"
@@ -74,6 +74,7 @@ interface ITargetData {
   uri: string
   name: string
   line: number
+  type: string
 }
 
 interface IDefinition {
@@ -594,11 +595,12 @@ class Server {
     const md = new MarkdownIt("commonmark", {})
     md.use(mystBlocksPlugin)
     if (this.config.parsing.extensions.includes("colon_fence")) {
-      md.use(divPlugin)
+      md.use(mystDivPlugin)
     }
     // eslint-disable-next-line @typescript-eslint/no-empty-function
     md.use(frontMatterPlugin, () => {})
     md.enable("table")
+    // disable anything after block parsing, since we don't need it and want to parse fast
     md.disable(["inline", "text_join"])
     // TODO make a plugin that outputs link definitions as tokens (to get map)
     const env: { references: { [key: string]: { title: string; href: string } } } = {
@@ -609,12 +611,59 @@ class Server {
     // create a mapping of line number to token indexes that span that line
     // this is used for cursor based server queries, such as hover and completions
     const lineToTokenIndex: number[][] = []
+    const targets: ITargetData[] = []
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i]
       if (!token.map) {
         continue
       }
-      // loop through all lines the token spans
+      // Collect possible targets: targets above blocks, and `name` options for directives
+      if (token.type === "myst_target") {
+        targets.push({
+          name: token.content,
+          uri: textDocument.uri,
+          line: token.map[0],
+          type: "target"
+        })
+      }
+      if (token.type === "div_open" && token.meta?.options?.name) {
+        targets.push({
+          name: token.meta.options.name,
+          uri: textDocument.uri,
+          line: token.map[0],
+          type: "name"
+        })
+      }
+      // TODO move into a markdown-it plugin?
+      if (token.type === "fence" && token.info.match(/^{[^}]+}/)) {
+        const lines = token.content.split("\n")
+        const optText: string[] = []
+        // loop through lines under one does not start with :
+        for (let j = 0; j < lines.length; j++) {
+          if (lines[j].startsWith(":")) {
+            optText.push(lines[j].slice(1))
+          } else {
+            break
+          }
+        }
+        if (optText.length > 0) {
+          try {
+            const opts = yaml.load(optText.join("\n")) as any
+            if (typeof opts === "object" && opts.name) {
+              targets.push({
+                name: opts.name,
+                uri: textDocument.uri,
+                line: token.map[0],
+                type: "name"
+              })
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+
+      // loop through all lines the token spans, for referencing later by cursor position
       for (let j = token.map[0]; j < token.map[1]; j++) {
         if (lineToTokenIndex[j] === undefined) {
           lineToTokenIndex[j] = []
@@ -625,15 +674,6 @@ class Server {
     const definitions = Object.entries(env.references).map(([k, v]) => {
       return { key: k, href: v.href, title: v.title }
     })
-    const targets = tokens
-      .filter(t => t.type === "myst_target" && t.map)
-      .map(t => {
-        return {
-          name: t.content,
-          uri: textDocument.uri,
-          line: t.map ? t.map[0] : 0
-        }
-      })
     return {
       tokens,
       lineToTokenIndex,
@@ -791,7 +831,7 @@ class Server {
           yield {
             label: target.name,
             kind: CompletionItemKind.Reference,
-            detail: "MyST target",
+            detail: `MyST ${target.type}`,
             data: "myst.target",
             textEdit: completetionTextEdit(target.name, start, cursor)
           }

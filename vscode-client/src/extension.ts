@@ -33,20 +33,17 @@ export function activate(context: ExtensionContext) {
 
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
-    // Register the server for markdown documents
     documentSelector: [
       { scheme: "file", language: "markdown" },
+      { scheme: "file", language: "myst" },
       { notebook: "*", language: "markdown" }
     ]
-    // synchronize: {
-    //   fileEvents: workspace.createFileSystemWatcher("**/*.md")
-    // }
   }
 
   // Create the language client and start the client.
   client = new LanguageClient(
     "myst.lsp",
-    "Language Server MyST",
+    "MyST Language Server",
     serverOptions,
     clientOptions
   )

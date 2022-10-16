@@ -40,14 +40,23 @@
     "vscode": "^1.66.0"
   },
   "activationEvents": [
-    "onLanguage:markdown"
+    "onLanguage:markdown",
+    "onLanguage:myst"
   ],
-  "publisher": "ExecutableBookProject",
+  "publisher": "chrisjsewell",
   "contributes": {
     "configuration": {
       "type": "object",
       "title": "MyST LSP configuration",
       "properties": {}
-    }
+    },
+    "languages": [
+      {
+        "id": "myst",
+        "aliases": [
+          "MyST"
+        ]
+      }
+    ]
   }
 }

@@ -1,7 +1,8 @@
 import MarkdownIt = require("markdown-it")
 import StateBlock = require("markdown-it/lib/rules_block/state_block")
+import yaml from "js-yaml"
 
-export function divPlugin(md: MarkdownIt): void {
+export function mystDivPlugin(md: MarkdownIt): void {
   md.block.ruler.before("fence", "div", parseDiv, {
     alt: ["paragraph", "reference", "blockquote", "list"]
   })
@@ -13,10 +14,11 @@ function parseDiv(
   endLine: number,
   silent: boolean
 ): boolean {
-  const min_markers = 3
-  const marker_str = ":"
-  const marker_char = marker_str.charCodeAt(0)
-  const marker_len = marker_str.length
+  const min_markers = 3,
+    marker_str = ":",
+    marker_char = marker_str.charCodeAt(0),
+    marker_len = marker_str.length,
+    colonCharCode = ":".charCodeAt(0)
 
   let pos,
     nextLine,
@@ -57,11 +59,15 @@ function parseDiv(
   //
   nextLine = startLine
 
+  // identify the option lines
+  let inOptions = true
+  let optionsEndLine: number | null = null
+
   for (;;) {
     nextLine++
     if (nextLine >= endLine) {
-      // unclosed block should be autoclosed by end of document.
-      // also block seems to be autoclosed by end of parent
+      // unclosed block should be auto-closed by end of document.
+      // also block seems to be auto-closed by end of parent
       break
     }
 
@@ -73,6 +79,17 @@ function parseDiv(
       // - ```
       //  test
       break
+    }
+
+    if (
+      inOptions &&
+      colonCharCode === state.src.charCodeAt(start) &&
+      colonCharCode !== state.src.charCodeAt(start + 1) &&
+      state.sCount[nextLine] - state.blkIndent <= 3
+    ) {
+      optionsEndLine = nextLine
+    } else {
+      inOptions = false
     }
 
     if (marker_char !== state.src.charCodeAt(start)) {
@@ -122,6 +139,29 @@ function parseDiv(
   token.block = true
   token.info = params
   token.map = [startLine, nextLine]
+  if (optionsEndLine) {
+    let optText = state.getLines(
+      startLine + 1,
+      optionsEndLine + 1,
+      state.blkIndent,
+      false
+    )
+    optText = optText
+      .split("\n")
+      .map(line => line.replace(/^\s+/, "").slice(1))
+      .join("\n")
+    token.meta = { optMap: [startLine + 1, optionsEndLine] }
+    try {
+      const options = yaml.load(optText)
+      if (typeof options !== "object") {
+        throw new Error("Options must be a dictionary")
+      }
+      token.meta.options = options
+    } catch (err) {
+      token.meta.optError = `${err}`
+    }
+    startLine = optionsEndLine
+  }
 
   state.md.block.tokenize(state, startLine + 1, nextLine)
 
