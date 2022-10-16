@@ -73,16 +73,24 @@ See <https://github.com/jupyter-lsp/jupyterlab-lsp>
 
 ## TODO / Notes
 
+From https://github.com/microsoft/language-server-protocol/issues/1465#issuecomment-1119545029:
+
+> In general the design of LSP is that the server runs where the files are.
+> So it is currently common pratice that a server accesses the file system directly (minus the files for which the server received an open event since this transfers the file's ownership to the client)
+
+- [ ] utf-16 encoding? https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocuments
 - [ ] folding range for headings
 - [ ] diagnostics if heading levels are not sequential
 - [ ] background reading of all files in the workspace (to populate targets lookup etc)
   - [x] text files
-  - [ ] notebooks (how to get the correct uri for a cell?)
+  - [ ] notebooks
+    - how to get the correct uri for a cell? https://github.com/microsoft/language-server-protocol/issues/1399 (see also https://github.com/microsoft/vscode/issues/123025 would be ideal to get data from the client)
 - [ ] parsing of directive options, which could then be used to add to targets lookup (i.e. for any `name` option)
 - [ ] markdown-it-front-matter plugin sets wrong map (uses `pos` instead of `nextLine`) which causes wrong folding range etc
 - [ ] workspace support (e.g. for targets lookup)
 - [ ] use the client's file watcher for `myst.yml`, if the client supports it
 - [ ] watch all files in project (and reparse), or just assume that the only files changing are those sent by the client?
+  - pyright uses the client file watching if available (https://github.com/microsoft/pyright/blob/50e12b4bea4fcdb61d96f855ca1e430bb8b41ca8/packages/pyright-internal/src/languageServerBase.ts#L666), then `chokidar` when file watching is not implemented (https://github.com/microsoft/pyright/blob/50e12b4bea4fcdb61d96f855ca1e430bb8b41ca8/packages/pyright-internal/src/common/chokidarFileWatcherProvider.ts#L9)
 - [ ] intersphinx support
 - [ ] doi hover (and other links/autolinks?)
 

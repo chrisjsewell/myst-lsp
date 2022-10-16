@@ -41,6 +41,7 @@ import {
   TextEdit
 } from "vscode-languageserver/node"
 import { TextDocument } from "vscode-languageserver-textdocument"
+import { URI } from "vscode-uri"
 
 import * as dirDict from "./directives.json"
 import {
@@ -56,7 +57,7 @@ import { getLine, matchReferenceLink } from "./utils"
 interface ServerConfig {
   files: {
     text: string[]
-    notebook: string[]
+    jupyter: string[]
     ignore: string[]
   }
   parsing: {
@@ -282,7 +283,7 @@ class Server {
       defaults: {
         files: {
           text: ["**/*.md"],
-          notebook: ["**/*.ipynb"],
+          jupyter: ["**/*.ipynb"],
           ignore: [
             "**/node_modules/**",
             "**/.git/**",
@@ -320,7 +321,7 @@ class Server {
                   type: "string"
                 }
               },
-              notebook: {
+              jupyter: {
                 type: "array",
                 items: {
                   type: "string"
@@ -513,21 +514,51 @@ class Server {
       absolute: true,
       ignore: this.config.files.ignore
     })
+    // glob all jupyter notebook based files relative to the root path
+    const filesNb = await glob(this.config.files.jupyter, {
+      cwd: rootPath,
+      absolute: true,
+      ignore: this.config.files.ignore
+    })
+    const numFiles = filesText.length + filesNb.length
 
     const progress = await this.connection.window.createWorkDoneProgress()
     progress.begin("MyST LSP", 0, "Analysing Project")
     this.db.clear()
-    for (const [index, file] of filesText.entries()) {
-      progress.report((index / filesText.length) * 100, "Analysing Project")
+    for await (const [index, file] of filesText.entries()) {
+      progress.report((index / numFiles) * 100, "Analysing Project")
       const content = fs.readFileSync(file, "utf-8")
-      const doc = TextDocument.create(
-        url.pathToFileURL(file).toString(),
-        "markdown",
-        0,
-        content
-      )
+      const doc = TextDocument.create(URI.file(file).toString(), "markdown", 0, content)
       const data = this.parseTextDocument(doc)
       this.db.insertTargets(data.targets)
+    }
+    for await (const [index, file] of filesNb.entries()) {
+      progress.report(
+        ((filesText.length + index) / numFiles) * 100,
+        "Analysing Project"
+      )
+      const content = fs.readFileSync(file, "utf-8")
+      const cells = JSON.parse(content).cells as {
+        cell_type: string
+        source: string[]
+      }[]
+      cells.forEach((cell, index) => {
+        if (cell.cell_type === "markdown") {
+          let uri = URI.file(file)
+          if (this.clientParams.clientInfo?.name === "Visual Studio Code") {
+            // see: https://github.com/microsoft/language-server-protocol/issues/1399
+            uri = cellUriGenerate(URI.file(file), index)
+          }
+          const doc = TextDocument.create(
+            uri.toString(),
+            "markdown",
+            0,
+            cell.source.join("")
+          )
+          const data = this.parseTextDocument(doc)
+          this.db.insertTargets(data.targets)
+        }
+      })
     }
     progress.done()
 
@@ -635,6 +666,7 @@ class Server {
     }
     for (const cell of change.cells.removed) {
       this.cache.removeUri(cell.document)
+      this.db.removeUri(cell.document)
     }
     for (const cell of change.cells.added) {
       const cellDoc = this.notebooks.getCellTextDocument(cell)
@@ -945,6 +977,18 @@ function completetionTextEdit(
       end: cursor
     }
   }
+}
+
+const _lengths = ["W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f"]
+const _radix = 7
+
+/** adapted from https://github.com/microsoft/vscode/blob/990cc855de8b8b695b6acc086006904caa35434d/src/vs/workbench/contrib/notebook/common/notebookCommon.ts */
+function cellUriGenerate(notebook: URI, index: number): URI {
+  const s = index.toString(_radix)
+  const p = s.length < _lengths.length ? _lengths[s.length - 1] : "z"
+
+  const fragment = `${p}${s}s${Buffer.from(notebook.scheme).toString("base64")}`
+  return notebook.with({ scheme: "vscode-notebook-cell", fragment })
 }
 
 new Server()
