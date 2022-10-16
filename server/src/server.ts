@@ -563,7 +563,9 @@ class Server {
     }
     progress.done()
 
-    this.connection.console.log(`Finished analysing project: ${rootUri}`)
+    this.connection.console.log(
+      `Finished analysing project (${filesText.length} text, ${filesNb.length} jupyter): ${rootUri}`
+    )
   }
 
   // analyse an open text document, and store the result in the cache
