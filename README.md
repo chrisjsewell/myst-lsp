@@ -502,4 +502,4 @@ This was originally adapted from <https://github.com/microsoft/vscode-extension-
 [npm-link]: https://www.npmjs.com/package/myst-lsp
 [jupyterlab-lsp]: https://github.com/jupyter-lsp/jupyterlab-lsp
 [binder-badge]: https://mybinder.org/badge_logo.svg
-[binder-link]: https://mybinder.org/v2/gh/chrisjsewell/myst-lsp/main
+[binder-link]: https://mybinder.org/v2/gh/chrisjsewell/myst-lsp/main?urlpath=lab/tree/example/index.md
