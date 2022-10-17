@@ -19,10 +19,10 @@ It works in both Markdown text files and Notebook Markdown cells (if supported b
 - Semantic highlighting of MyST Markdown syntax
 
 VS Code:
-![vscode demonstration](demo-vscode.gif)
+![vscode demonstration](static/demo-vscode.gif)
 
 JupyterLab (with [jupyterlab-lsp]):
-![jupyterlab demonstration](demo-jupyterlab.gif)
+![jupyterlab demonstration](static/demo-jupyterlab.gif)
 
 ## Usage
 

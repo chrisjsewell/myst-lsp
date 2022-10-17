@@ -3,12 +3,13 @@
   "description": "A Language Server for MyST Markdown",
   "author": "Chris Sewell",
   "license": "MIT",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "repository": {
     "type": "git",
     "url": "https://github.com/chrisjsewell/myst-lsp"
   },
   "publisher": "chrisjsewell",
+  "icon": "static/MyST LSP 128x128.png",
   "main": "./vscode-client/out/extension",
   "engines": {
     "vscode": "^1.66.0"
