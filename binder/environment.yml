@@ -1,4 +1,4 @@
-name: jupyterlab-myst-lsp-dev
+name: myst-lsp-jlab-dev
 channels:
 - conda-forge
 dependencies:

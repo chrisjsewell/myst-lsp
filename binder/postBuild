@@ -2,3 +2,19 @@
 
 npm install
 npm run compile
+
+cat > ~/.jupyter/jupyter_server_config.json << EOF
+{
+  "LanguageServerManager": {
+    "language_servers": {
+      "myst-lsp": {
+        "version": 2,
+        "argv": ["npx", "--yes", "myst-lsp", "--stdio"],
+        "languages": ["ipythongfm"],
+        "mime_types": ["text/x-markdown"],
+        "display_name": "MyST LSP server"
+      }
+    }
+  }
+}
+EOF

@@ -4,6 +4,7 @@
 
 [![npm-badge]][npm-link]
 [![VS Marketplace][vs-market-badge]][vs-market-link]
+[![Binder][binder-badge]][binder-link]
 
 A Language Server Protocol provider for MyST Markdown.
 It works in both Markdown text files and Notebook Markdown cells (if supported by the client).
@@ -49,8 +50,8 @@ Then install [jupyterlab-lsp] and [nodejs](https://nodejs.org) (plus npm), and s
 Its recommended to use a [Conda](https://docs.conda.io/en/latest/miniconda.html) environment for this (plus [mamba](https://github.com/mamba-org/mamba)), e.g.:
 
 ```console
-$ mamba create -n myst-lsp "jupyterlab-lsp>=3.3.0,<4.0.0a0 nodejs=16"
-$ conda activate myst-lsp
+$ mamba env create -f binder/environment.yml
+$ conda activate myst-lsp-jlab-dev
 $ jupyter lab
 ```
 
@@ -500,3 +501,5 @@ This was originally adapted from <https://github.com/microsoft/vscode-extension-
 [npm-badge]: https://img.shields.io/npm/v/myst-lsp.svg
 [npm-link]: https://www.npmjs.com/package/myst-lsp
 [jupyterlab-lsp]: https://github.com/jupyter-lsp/jupyterlab-lsp
+[binder-badge]: https://mybinder.org/badge_logo.svg
+[binder-link]: https://mybinder.org/v2/gh/chrisjsewell/myst-lsp/main
