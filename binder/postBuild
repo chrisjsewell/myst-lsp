@@ -5,6 +5,10 @@ npm install
 npm run compile
 
 # add the server configuration
+get_abs_filename() {
+  echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+}
+SERVER_EXEC=$(get_abs_filename "server/out/server.js")
 mkdir -p ~/.jupyter
 cat > ~/.jupyter/jupyter_server_config.json << EOF
 {
@@ -12,7 +16,7 @@ cat > ~/.jupyter/jupyter_server_config.json << EOF
     "language_servers": {
       "myst-lsp": {
         "version": 2,
-        "argv": ["npx", "--yes", "myst-lsp", "--stdio"],
+        "argv": ["${server/out/server.js}"],
         "languages": ["ipythongfm"],
         "mime_types": ["text/x-markdown"],
         "display_name": "MyST LSP server"
