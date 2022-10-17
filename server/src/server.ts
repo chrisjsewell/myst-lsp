@@ -49,8 +49,9 @@ import {
   matchDirectiveName,
   matchDirectiveStart
 } from "./directiveUtils"
-import { mystDivPlugin } from "./mdPluginDiv"
-import { mystBlocksPlugin } from "./mdPluginMyst"
+import { definitionPlugin } from "./mditPlugins/defintions"
+import { mystBlocksPlugin } from "./mditPlugins/mystBlocks"
+import { mystDivPlugin } from "./mditPlugins/mystDiv"
 import * as roleDict from "./roles.json"
 import { getLine, matchReferenceLink } from "./utils"
 
@@ -79,8 +80,10 @@ interface ITargetData {
 
 interface IDefinition {
   key: string
+  raw: string
   title: string
   href: string
+  line: number
 }
 
 interface ICacheData {
@@ -595,6 +598,7 @@ class Server {
     const text = textDocument.getText()
 
     const md = new MarkdownIt("commonmark", {})
+    md.use(definitionPlugin)
     md.use(mystBlocksPlugin)
     if (this.config.parsing.extensions.includes("colon_fence")) {
       md.use(mystDivPlugin)
@@ -604,20 +608,27 @@ class Server {
     md.enable("table")
     // disable anything after block parsing, since we don't need it and want to parse fast
     md.disable(["inline", "text_join"])
-    // TODO make a plugin that outputs link definitions as tokens (to get map)
-    const env: { references: { [key: string]: { title: string; href: string } } } = {
-      references: {}
-    }
-    const tokens = md.parse(text, env)
+    const tokens = md.parse(text, {})
 
     // create a mapping of line number to token indexes that span that line
     // this is used for cursor based server queries, such as hover and completions
     const lineToTokenIndex: number[][] = []
     const targets: ITargetData[] = []
+    const definitions: IDefinition[] = []
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i]
       if (!token.map) {
         continue
+      }
+      // Collect definitions
+      if (token.type === "definition") {
+        definitions.push({
+          key: token.meta.key,
+          raw: token.meta.raw,
+          title: token.meta.title,
+          href: token.meta.href,
+          line: token.map[0]
+        })
       }
       // Collect possible targets: targets above blocks, and `name` options for directives
       if (token.type === "myst_target") {
@@ -673,9 +684,6 @@ class Server {
         lineToTokenIndex[j].push(i)
       }
     }
-    const definitions = Object.entries(env.references).map(([k, v]) => {
-      return { key: k, href: v.href, title: v.title }
-    })
     return {
       tokens,
       lineToTokenIndex,
@@ -847,12 +855,12 @@ class Server {
       const start = matchDefLink[1]
       for (const data of this.cache.iterDefs(uri, true)) {
         yield {
-          label: data.key,
+          label: data.raw,
           kind: CompletionItemKind.Reference,
           detail: "MyST definition",
           documentation: data.href,
           data: "myst.definition",
-          textEdit: completetionTextEdit(data.key, start, cursor)
+          textEdit: completetionTextEdit(data.raw, start, cursor)
         }
       }
       return

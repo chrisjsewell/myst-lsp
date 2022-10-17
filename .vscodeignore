@@ -6,3 +6,5 @@
 **/*.map
 .gitignore
 **/tsconfig.json
+example/**
+static/*.gif

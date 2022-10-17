@@ -12,6 +12,7 @@ It works in both Markdown text files and Notebook Markdown cells (if supported b
 - Hover on directive names
 - Autocompletion on directive names
 - Autocompletion on role names
+- Autocompletion on Markdown definition references
 - Background analysis of Markdown files and Jupyter notebooks in the project
   - Configuration with `myst.yml` file
 - Autocompletion in Markdown links and "Jump to definition"
