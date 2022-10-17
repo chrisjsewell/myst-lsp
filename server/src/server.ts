@@ -461,7 +461,30 @@ class Server {
     // however, in particular jupyterlab-lsp does not support this yet
     // TODO use the client's file watcher, if the client supports it
     if (this.clientParams.rootUri) {
-      const watcher = fs.watchFile(
+      // create a function to load the config from file
+      const loadConfig = () => {
+        let newConfig: any = {}
+        if (this.clientParams.rootUri) {
+          try {
+            newConfig = yaml.load(
+              fs.readFileSync(
+                path.join(url.fileURLToPath(this.clientParams.rootUri), "myst.yml"),
+                "utf8"
+              )
+            ) as any
+          } catch (e) {
+            this.connection.console.error(`Reading myst.yml failed: ${e}`)
+          }
+        }
+        return newConfig
+      }
+
+      // load the config file and update the config (potentially triggering a reanalysis)
+      const newConfig = loadConfig()
+      await this.updateConfig(newConfig)
+
+      // watch the config file for changes and update the config (potentially triggering a reanalysis)
+      fs.watchFile(
         path.join(url.fileURLToPath(this.clientParams.rootUri), "myst.yml"),
         async (curr: fs.Stats, prev: fs.Stats) => {
           // check if file deleted
@@ -471,22 +494,12 @@ class Server {
             curr.mtime !== prev.mtime &&
             this.clientParams.rootUri
           ) {
-            try {
-              newConfig = yaml.load(
-                fs.readFileSync(
-                  path.join(url.fileURLToPath(this.clientParams.rootUri), "myst.yml"),
-                  "utf8"
-                )
-              ) as any
-            } catch (e) {
-              this.connection.console.error(`Reading myst.yml failed: ${e}`)
-            }
+            newConfig = loadConfig()
           }
-          this.updateConfig(newConfig)
+          await this.updateConfig(newConfig)
         }
       )
     }
-    await this.analyzeProject()
   }
 
   async analyzeProject() {
