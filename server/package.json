@@ -1,7 +1,7 @@
 {
-  "name": "myst-lsp-server",
-  "description": "Example implementation of a language server in node.",
-  "version": "0.0.2",
+  "name": "myst-lsp",
+  "description": "A Language Server for MyST Markdown",
+  "version": "0.0.3",
   "author": "Chris Sewell",
   "license": "MIT",
   "engines": {
@@ -9,7 +9,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/executablebooks/myst-lsp"
+    "url": "https://github.com/chrisjsewell/myst-lsp"
+  },
+  "bin": {
+    "myst-lsp": "./out/server.js"
   },
   "dependencies": {
     "fast-glob": "^3.2.12",
@@ -22,10 +25,10 @@
     "vscode-languageserver-textdocument": "^1.0.4",
     "vscode-uri": "^3.0.6"
   },
-  "scripts": {},
   "devDependencies": {
     "@types/js-yaml": "^4.0.5",
     "@types/lokijs": "^1.5.7",
     "@types/markdown-it": "^12.2.3"
-  }
+  },
+  "scripts": {}
 }

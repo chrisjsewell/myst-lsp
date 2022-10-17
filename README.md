@@ -1,15 +1,71 @@
 # myst-lsp
 
+**IN DEVELOPMENT**
+
+[![npm-badge]][npm-link]
 [![VS Marketplace][vs-market-badge]][vs-market-link]
 
-[vs-market-badge]: https://vsmarketplacebadge.apphb.com/version/chrisjsewell.myst-lsp.svg "Current Release"
-[vs-market-link]: https://marketplace.visualstudio.com/items?itemName=chrisjsewell.myst-lsp
-
 A Language Server Protocol provider for MyST Markdown.
+It works in both Markdown text files and Notebook Markdown cells (if supported by the client).
+
+- Hover on directive names
+- Autocompletion on directive names
+- Autocompletion on role names
+- Background analysis of Markdown files and Jupyter notebooks in the project
+  - Configuration with `myst.yml` file
+- Autocompletion in Markdown links and "Jump to definition"
+  - Cross document targets and named directives
+- Folding ranges for content blocks
+- Semantic highlighting of MyST Markdown syntax
+
+VS Code:
+![vscode demonstration](demo-vscode.gif)
+
+JupyterLab (with [jupyterlab-lsp]):
+![jupyterlab demonstration](demo-jupyterlab.gif)
 
 ## Usage
 
-### Completions
+In VS Code, simply install the [MyST LSP extension][vs-market-link].
+
+In JupyterLab, currently you need to setup the server manually.
+Add a server configuration to e.g. `~/.jupyter/jupyter_server_config.json`:
+
+```json
+{
+  "LanguageServerManager": {
+    "language_servers": {
+      "myst-lsp": {
+        "version": 2,
+        "argv": ["npx", "--yes", "myst-lsp", "--stdio"],
+        "languages": ["ipythongfm"],
+        "mime_types": ["text/x-markdown"],
+        "display_name": "MyST LSP server"
+      }
+    }
+  }
+}
+```
+
+Then install [jupyterlab-lsp] and [nodejs](https://nodejs.org) (plus npm), and start JupyterLab.
+Its recommended to use a [Conda](https://docs.conda.io/en/latest/miniconda.html) environment for this (plus [mamba](https://github.com/mamba-org/mamba)), e.g.:
+
+```console
+$ mamba create -n myst-lsp "jupyterlab-lsp>=3.3.0,<4.0.0a0 nodejs=16"
+$ conda activate myst-lsp
+$ jupyter lab
+```
+
+### Client capabilities
+
+| Feature            | VS Code | JupyterLab |
+| ------------------ | :-----: | :--------: |
+| Notebook Cells     |   ✅    |     ❌     |
+| Hover              |   ✅    |     ✅     |
+| Completion         |   ✅    |     ✅     |
+| Definitions        |   ✅    |     ✅     |
+| Folding ranges     |   ✅    |     ❌     |
+| Semantic highlight |   ✅    |     ❌     |
 
 Note that by default, VS-Code uses `CTRL+SPACE` to trigger completions,
 whereas JupyterLab uses `Tab` to trigger completions.
@@ -44,11 +100,10 @@ whereas JupyterLab uses `Tab` to trigger completions.
 
 ## Launching in Jupyter Lab
 
-See <https://github.com/jupyter-lsp/jupyterlab-lsp>
+See [jupyterlab-lsp]:
 
 1. Run `npm run compile`
-2. Make script executable: `chmod +x server/out/server.js`
-3. Add server configuration: `~/.jupyter/jupyter_server_config.json`:
+2. Add server configuration: `~/.jupyter/jupyter_server_config.json`:
 
 ```json
 {
@@ -74,7 +129,7 @@ See <https://github.com/jupyter-lsp/jupyterlab-lsp>
    $ jupyter lab
    ```
 
-5. Open a Markdown file, and make sure the file type is set to `MyST`
+5. Open a Markdown file, and make sure the file type is set to `ipythongfm`
 
 ## TODO / Notes
 
@@ -83,14 +138,15 @@ From https://github.com/microsoft/language-server-protocol/issues/1465#issuecomm
 > In general the design of LSP is that the server runs where the files are.
 > So it is currently common pratice that a server accesses the file system directly (minus the files for which the server received an open event since this transfers the file's ownership to the client)
 
+- [ ] Parse `myst.yml` before first project analysis
 - [ ] utf-16 encoding? https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocuments
 - [ ] folding range for headings
-- [ ] diagnostics if heading levels are not sequential
+- [ ] diagnostics, e.g. if heading levels are not sequential, unused definitions, unknown definitions/links/directives/roles
 - [ ] background reading of all files in the workspace (to populate targets lookup etc)
   - [x] text files
-  - [ ] notebooks
+  - [x] notebooks
     - how to get the correct uri for a cell? https://github.com/microsoft/language-server-protocol/issues/1399 (see also https://github.com/microsoft/vscode/issues/123025 would be ideal to get data from the client)
-- [ ] parsing of directive options, which could then be used to add to targets lookup (i.e. for any `name` option)
+- [x] parsing of directive options, which could then be used to add to targets lookup (i.e. for any `name` option)
 - [ ] markdown-it-front-matter plugin sets wrong map (uses `pos` instead of `nextLine`) which causes wrong folding range etc
 - [ ] workspace support (e.g. for targets lookup)
 - [ ] use the client's file watcher for `myst.yml`, if the client supports it
@@ -440,3 +496,9 @@ As of vscode 1.72, `InitializeParams` returns:
 ## Acknowledgements
 
 This was originally adapted from <https://github.com/microsoft/vscode-extension-samples/tree/main/lsp-sample>
+
+[vs-market-badge]: https://vsmarketplacebadge.apphb.com/version/chrisjsewell.myst-lsp.svg "Current Release"
+[vs-market-link]: https://marketplace.visualstudio.com/items?itemName=chrisjsewell.myst-lsp
+[npm-badge]: https://img.shields.io/npm/v/myst-lsp.svg
+[npm-link]: https://www.npmjs.com/package/myst-lsp
+[jupyterlab-lsp]: https://github.com/jupyter-lsp/jupyterlab-lsp
