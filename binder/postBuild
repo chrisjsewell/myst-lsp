@@ -16,7 +16,7 @@ cat > ~/.jupyter/jupyter_server_config.json << EOF
     "language_servers": {
       "myst-lsp": {
         "version": 2,
-        "argv": ["${server/out/server.js}"],
+        "argv": ["${SERVER_EXEC}"],
         "languages": ["ipythongfm"],
         "mime_types": ["text/x-markdown"],
         "display_name": "MyST LSP server"
