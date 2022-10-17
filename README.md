@@ -18,10 +18,8 @@ It works in both Markdown text files and Notebook Markdown cells (if supported b
 - Folding ranges for content blocks
 - Semantic highlighting of MyST Markdown syntax
 
-VS Code:
 ![vscode demonstration](static/demo-vscode.gif)
 
-JupyterLab (with [jupyterlab-lsp]):
 ![jupyterlab demonstration](static/demo-jupyterlab.gif)
 
 ## Usage
