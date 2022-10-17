@@ -2,5 +2,5 @@ name: jupyterlab-myst-lsp-dev
 channels:
 - conda-forge
 dependencies:
-- jupyterlab-lsp >=3.3.0<4.0.0a0
+- jupyterlab-lsp >=3.3.0,<4.0.0a0
 - nodejs=16
