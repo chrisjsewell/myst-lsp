@@ -9,7 +9,7 @@
     "url": "https://github.com/chrisjsewell/myst-lsp"
   },
   "publisher": "chrisjsewell",
-  "icon": "static/MyST LSP 128x128.png",
+  "icon": "static/icon_128x128.png",
   "main": "./vscode-client/out/extension",
   "engines": {
     "vscode": "^1.66.0"
