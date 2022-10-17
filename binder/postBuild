@@ -1,8 +1,11 @@
 #!/bin/bash
 
+# install the server
 npm install
 npm run compile
 
+# add the server configuration
+mkdir -p ~/.jupyter
 cat > ~/.jupyter/jupyter_server_config.json << EOF
 {
   "LanguageServerManager": {
