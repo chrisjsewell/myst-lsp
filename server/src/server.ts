@@ -8,6 +8,7 @@ import yaml from "js-yaml"
 import { validate } from "jsonschema"
 import loki from "lokijs"
 import MarkdownIt from "markdown-it"
+import { normalizeReference } from "markdown-it/lib/common/utils"
 import Token from "markdown-it/lib/token"
 import frontMatterPlugin from "markdown-it-front-matter"
 import path from "path"
@@ -18,7 +19,6 @@ import {
   CompletionItem,
   CompletionItemKind,
   createConnection,
-  Definition,
   DefinitionParams,
   Diagnostic,
   DiagnosticSeverity,
@@ -30,6 +30,7 @@ import {
   InitializedParams,
   InitializeParams,
   InitializeResult,
+  Location,
   NotebookDocument,
   NotebookDocuments,
   Position,
@@ -55,7 +56,7 @@ import { definitionPlugin } from "./mditPlugins/defintions"
 import { mystBlocksPlugin } from "./mditPlugins/mystBlocks"
 import { mystDivPlugin } from "./mditPlugins/mystDiv"
 import * as roleDict from "./roles.json"
-import { getLine, matchReferenceLink } from "./utils"
+import { getLine, matchReferenceDefinition, matchReferenceLink } from "./utils"
 
 interface ServerConfig {
   files: {
@@ -964,31 +965,51 @@ class Server {
     return null
   }
 
-  onDefinition(params: DefinitionParams): Definition | null {
+  onDefinition(params: DefinitionParams): Location[] | null {
     const doc = this.getDocument(params.textDocument.uri)
     if (!doc) {
       return null
     }
-    const match = matchReferenceLink(doc, params.position)
-    if (!match) {
-      return null
-    }
-    const targets = this.db.getTargets(match.text)
-    const defs = []
-    for (const target of targets) {
-      defs.push({
-        uri: target.uri,
-        range: {
-          start: {
-            line: target.line,
-            character: 0
-          },
-          end: {
-            line: target.line,
-            character: 10000
+    const defs: Location[] = []
+    const matchRefLink = matchReferenceLink(doc, params.position)
+    if (matchRefLink) {
+      const targets = this.db.getTargets(matchRefLink.text)
+      for (const target of targets) {
+        defs.push({
+          uri: target.uri,
+          range: {
+            start: {
+              line: target.line,
+              character: 0
+            },
+            end: {
+              line: target.line,
+              character: 10000
+            }
           }
+        })
+      }
+    }
+    const matchRefDef = matchReferenceDefinition(doc, params.position)
+    if (matchRefDef) {
+      const defKey = normalizeReference(matchRefDef.text)
+      for (const def of this.cache.iterDefs(params.textDocument.uri)) {
+        if (def.key === defKey) {
+          defs.push({
+            uri: params.textDocument.uri,
+            range: {
+              start: {
+                line: def.line,
+                character: 0
+              },
+              end: {
+                line: def.line,
+                character: 10000
+              }
+            }
+          })
         }
-      })
+      }
     }
     return defs
   }

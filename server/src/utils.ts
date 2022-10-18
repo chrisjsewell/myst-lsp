@@ -93,3 +93,32 @@ export function matchReferenceLink(
   }
   return null
 }
+
+export function matchReferenceDefinition(
+  doc: TextDocument,
+  cursor: Position
+): null | { text: string; range: { start: Position; end: Position } } {
+  // TODO backslash escapes, don't allow if ends with (, etc
+  const match = matchPositionText(doc, cursor, /\[([^\]]*)$/, /^([^\]]*)\]/)
+  if (match.before && match.after && match.before.index) {
+    const text = match.before[1] + match.after[1]
+    if (!text) {
+      return null
+    }
+    return {
+      text,
+      range: {
+        start: {
+          line: cursor.line,
+          character: match.before.index + 2
+        },
+        end: {
+          line: cursor.line,
+          character:
+            match.before.index + 2 + match.before[1].length + match.after[1].length
+        }
+      }
+    }
+  }
+  return null
+}

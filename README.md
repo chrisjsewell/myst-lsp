@@ -12,7 +12,7 @@ It works in both Markdown text files and Notebook Markdown cells (if supported b
 - Hover on directive names
 - Autocompletion on directive names
 - Autocompletion on role names
-- Autocompletion on Markdown definition references
+- Autocompletion on Markdown definition references and "Jump to definition"
 - Background analysis of Markdown files and Jupyter notebooks in the project
   - Configuration with `myst.yml` file
 - Autocompletion in Markdown links and "Jump to definition"
@@ -156,6 +156,9 @@ From https://github.com/microsoft/language-server-protocol/issues/1465#issuecomm
   - pyright uses the client file watching if available (https://github.com/microsoft/pyright/blob/50e12b4bea4fcdb61d96f855ca1e430bb8b41ca8/packages/pyright-internal/src/languageServerBase.ts#L666), then `chokidar` when file watching is not implemented (https://github.com/microsoft/pyright/blob/50e12b4bea4fcdb61d96f855ca1e430bb8b41ca8/packages/pyright-internal/src/common/chokidarFileWatcherProvider.ts#L9)
 - [ ] intersphinx support
 - [ ] doi hover (and other links/autolinks?)
+- [ ] Lazily(?) run full inline parse when in inline block, somehow with character position character
+  - This would be ideal for identification of syntax for e.g. jump to definition etc
+  - It would not work though for incomplete text, like for auto-completions
 
 ### Jupyterlab-lsp
 

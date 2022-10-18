@@ -15,6 +15,8 @@ Depending on the LSP client you are using, some features may not be available.
 
 [Jump to directive](admonition-name)
 
+[Jump to MD definition][abc]
+
 ## Diagnostics
 
 Duplicate definition names:
