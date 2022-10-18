@@ -17,6 +17,7 @@ It works in both Markdown text files and Notebook Markdown cells (if supported b
   - Configuration with `myst.yml` file
 - Autocompletion in Markdown links and "Jump to definition"
   - Cross document targets and named directives
+- Diagnostic messages for duplicate definitions
 - Folding ranges for content blocks
 - Semantic highlighting of MyST Markdown syntax
 
@@ -64,6 +65,7 @@ $ jupyter lab
 | Hover              |   ✅    |     ✅     |
 | Completion         |   ✅    |     ✅     |
 | Definitions        |   ✅    |     ✅     |
+| Diagnostics        |   ✅    |     ✅     |
 | Folding ranges     |   ✅    |     ❌     |
 | Semantic highlight |   ✅    |     ❌     |
 
@@ -138,11 +140,11 @@ From https://github.com/microsoft/language-server-protocol/issues/1465#issuecomm
 > In general the design of LSP is that the server runs where the files are.
 > So it is currently common pratice that a server accesses the file system directly (minus the files for which the server received an open event since this transfers the file's ownership to the client)
 
-- [ ] Parse `myst.yml` before first project analysis
+- [x] Parse `myst.yml` before first project analysis
 - [ ] utf-16 encoding? https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocuments
 - [ ] folding range for headings
 - [ ] diagnostics, e.g. if heading levels are not sequential, unused definitions, unknown definitions/links/directives/roles
-- [ ] background reading of all files in the workspace (to populate targets lookup etc)
+- [x] background reading of all files in the workspace (to populate targets lookup etc)
   - [x] text files
   - [x] notebooks
     - how to get the correct uri for a cell? https://github.com/microsoft/language-server-protocol/issues/1399 (see also https://github.com/microsoft/vscode/issues/123025 would be ideal to get data from the client)

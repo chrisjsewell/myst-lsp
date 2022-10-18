@@ -20,6 +20,8 @@ import {
   createConnection,
   Definition,
   DefinitionParams,
+  Diagnostic,
+  DiagnosticSeverity,
   DidChangeWatchedFilesParams,
   FileChangeType,
   FoldingRange,
@@ -595,6 +597,10 @@ class Server {
       defs: data.definitions
     })
     this.db.insertTargets(data.targets)
+    this.connection.sendDiagnostics({
+      uri: textDocument.uri,
+      diagnostics: data.diagnostics
+    })
   }
 
   /** Parse a text document
@@ -606,6 +612,7 @@ class Server {
     lineToTokenIndex: number[][]
     definitions: IDefinition[]
     targets: ITargetData[]
+    diagnostics: Diagnostic[]
   } {
     // The validator creates diagnostics for all uppercase words length 2 and more
     const text = textDocument.getText()
@@ -628,6 +635,8 @@ class Server {
     const lineToTokenIndex: number[][] = []
     const targets: ITargetData[] = []
     const definitions: IDefinition[] = []
+    const diagnostics: Diagnostic[] = []
+    const defKeys = new Set()
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i]
       if (!token.map) {
@@ -635,6 +644,17 @@ class Server {
       }
       // Collect definitions
       if (token.type === "definition") {
+        if (defKeys.has(token.meta.key)) {
+          diagnostics.push({
+            range: {
+              start: { line: token.map[0], character: 0 },
+              end: { line: token.map[1], character: 1000 }
+            },
+            message: `Duplicate definition key: ${token.meta.key}`,
+            severity: DiagnosticSeverity.Warning
+          })
+        }
+        defKeys.add(token.meta.key)
         definitions.push({
           key: token.meta.key,
           raw: token.meta.raw,
@@ -701,7 +721,8 @@ class Server {
       tokens,
       lineToTokenIndex,
       definitions,
-      targets
+      targets,
+      diagnostics
     }
   }
 

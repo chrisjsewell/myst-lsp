@@ -14,3 +14,10 @@ Depending on the LSP client you are using, some features may not be available.
 [Jump to Nb target](notebook-section)
 
 [Jump to directive](admonition-name)
+
+## Diagnostics
+
+Duplicate definition names:
+
+[abc]: https://example.com
+[abc]: https://example.com
