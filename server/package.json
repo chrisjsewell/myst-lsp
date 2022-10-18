@@ -1,7 +1,7 @@
 {
   "name": "myst-lsp",
   "description": "A Language Server for MyST Markdown",
-  "version": "0.0.4",
+  "version": "0.0.7",
   "author": "Chris Sewell",
   "license": "MIT",
   "engines": {
