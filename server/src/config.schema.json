@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "type": "object",
+  "default": {
+    "files": {
+      "text": ["**/*.md"],
+      "jupyter": ["**/*.ipynb"],
+      "ignore": [
+        "**/node_modules/**",
+        "**/.git/**",
+        "**/.tox/**",
+        "**/.venv/**",
+        "**/_build/**"
+      ]
+    },
+    "parsing": {
+      "extensions": ["colon_fence"]
+    },
+    "lsp": {
+      "foldingTokens": [
+        "paragraph_open",
+        "blockquote_open",
+        "bullet_list_open",
+        "ordered_list_open",
+        "code_block",
+        "fence",
+        "html_block",
+        "table_open",
+        "div_open"
+      ]
+    }
+  },
+  "properties": {
+    "files": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "jupyter": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ignore": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "parsing": {
+      "type": "object",
+      "properties": {
+        "extensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "lsp": {
+      "type": "object",
+      "properties": {
+        "foldingTokens": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

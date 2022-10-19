@@ -46,6 +46,7 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument"
 import { URI } from "vscode-uri"
 
+import * as configSchema from "./config.schema.json"
 import * as dirDict from "./directives.json"
 import {
   makeDescription,
@@ -232,7 +233,7 @@ class Server {
   config: ServerConfig
 
   constructor() {
-    this.config = this.getDefaultConfig().defaults
+    this.config = JSON.parse(JSON.stringify(configSchema.default.default))
 
     this.clientCapabilities = {
       workspacesFolders: false,
@@ -285,93 +286,9 @@ class Server {
     this.connection.listen()
   }
 
-  getDefaultConfig(): { defaults: ServerConfig; schema: any } {
-    return {
-      defaults: {
-        files: {
-          text: ["**/*.md"],
-          jupyter: ["**/*.ipynb"],
-          ignore: [
-            "**/node_modules/**",
-            "**/.git/**",
-            "**/.tox/**",
-            "**/.venv/**",
-            "**/_build/**"
-          ]
-        },
-        parsing: {
-          extensions: ["colon_fence"]
-        },
-        lsp: {
-          foldingTokens: [
-            "paragraph_open",
-            "blockquote_open",
-            "bullet_list_open",
-            "ordered_list_open",
-            "code_block",
-            "fence",
-            "html_block",
-            "table_open",
-            "div_open"
-          ]
-        }
-      },
-      schema: {
-        type: "object",
-        properties: {
-          files: {
-            type: "object",
-            properties: {
-              text: {
-                type: "array",
-                items: {
-                  type: "string"
-                }
-              },
-              jupyter: {
-                type: "array",
-                items: {
-                  type: "string"
-                }
-              },
-              ignore: {
-                type: "array",
-                items: {
-                  type: "string"
-                }
-              }
-            }
-          },
-          parsing: {
-            type: "object",
-            properties: {
-              extensions: {
-                type: "array",
-                items: {
-                  type: "string"
-                }
-              }
-            }
-          },
-          lsp: {
-            type: "object",
-            properties: {
-              foldingTokens: {
-                type: "array",
-                items: {
-                  type: "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
   async updateConfig(newConfig: any) {
-    const { defaults, schema } = this.getDefaultConfig()
-    const result = validate(newConfig, schema)
+    const defaults = JSON.parse(JSON.stringify(configSchema.default.default))
+    const result = validate(newConfig, configSchema)
     if (!result.valid) {
       this.connection.console.error(`Invalid configuration: ${result.errors}`)
       return
