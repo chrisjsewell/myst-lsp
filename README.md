@@ -502,7 +502,7 @@ As of vscode 1.72, `InitializeParams` returns:
 
 This was originally adapted from <https://github.com/microsoft/vscode-extension-samples/tree/main/lsp-sample>
 
-[vs-market-badge]: https://vsmarketplacebadge.apphb.com/version/chrisjsewell.myst-lsp.svg "Current Release"
+[vs-market-badge]: https://vsmarketplacebadges.dev/version-short/chrisjsewell.myst-lsp.svg "Current Release"
 [vs-market-link]: https://marketplace.visualstudio.com/items?itemName=chrisjsewell.myst-lsp
 [npm-badge]: https://img.shields.io/npm/v/myst-lsp.svg
 [npm-link]: https://www.npmjs.com/package/myst-lsp
